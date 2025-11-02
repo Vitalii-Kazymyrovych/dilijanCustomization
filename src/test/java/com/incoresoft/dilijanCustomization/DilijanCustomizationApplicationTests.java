@@ -1,10 +1,10 @@
-package com.incoresoft.unknownlist;
+package com.incoresoft.dilijanCustomization;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 
 @SpringBootTest
-class UnknownListApplicationTests {
+class DilijanCustomizationApplicationTests {
 
     @Test
     void contextLoads() {

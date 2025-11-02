@@ -1,4 +1,4 @@
-package com.incoresoft.unknownlist.dto;
+package com.incoresoft.dilijanCustomization.domain.unknown.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
@@ -6,9 +6,9 @@ import lombok.Data;
 import java.util.List;
 
 @Data
-public class ListItemsResponse {
+public class DetectionsResponse {
   @JsonProperty("data")
-  private List<ListItemDto> data;
+  private List<DetectionDto> data;
   @JsonProperty("total")
   private Integer total;
   @JsonProperty("pages")

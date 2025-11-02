@@ -1,4 +1,4 @@
-package com.incoresoft.unknownlist;
+package com.incoresoft.dilijanCustomization;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -8,10 +8,10 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @SpringBootApplication
 @EnableScheduling
 @EnableRetry
-public class UnknownListApplication {
+public class DilijanCustomizationApplication {
 
     public static void main(String[] args) {
-        SpringApplication.run(UnknownListApplication.class, args);
+        SpringApplication.run(DilijanCustomizationApplication.class, args);
     }
 
 }

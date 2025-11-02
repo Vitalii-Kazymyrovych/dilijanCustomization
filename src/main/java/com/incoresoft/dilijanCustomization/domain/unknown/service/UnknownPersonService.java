@@ -1,8 +1,8 @@
-package com.incoresoft.unknownlist.service;
+package com.incoresoft.dilijanCustomization.domain.unknown.service;
 
-import com.incoresoft.unknownlist.config.FaceProps;
-import com.incoresoft.unknownlist.dto.*;
-import com.incoresoft.unknownlist.repository.FaceApiRepository;
+import com.incoresoft.dilijanCustomization.config.FaceProps;
+import com.incoresoft.dilijanCustomization.domain.unknown.dto.*;
+import com.incoresoft.dilijanCustomization.repository.FaceApiRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;

@@ -1,4 +1,4 @@
-package com.incoresoft.unknownlist.dto;
+package com.incoresoft.dilijanCustomization.domain.unknown.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;

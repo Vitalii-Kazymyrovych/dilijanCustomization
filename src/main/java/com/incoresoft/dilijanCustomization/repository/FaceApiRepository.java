@@ -1,9 +1,11 @@
-package com.incoresoft.unknownlist.repository;
+package com.incoresoft.dilijanCustomization.repository;
 
-import com.incoresoft.unknownlist.config.VezhaApiProps;
-import com.incoresoft.unknownlist.dto.*;
+import com.incoresoft.dilijanCustomization.config.VezhaApiProps;
+import com.incoresoft.dilijanCustomization.domain.unknown.dto.DetectionsResponse;
+import com.incoresoft.dilijanCustomization.domain.unknown.dto.FromDetectionRequest;
+import com.incoresoft.dilijanCustomization.domain.unknown.dto.ListItemDto;
+import com.incoresoft.dilijanCustomization.domain.unknown.dto.ListItemsResponse;
 import lombok.RequiredArgsConstructor;
-import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.*;
 import org.springframework.stereotype.Repository;
 import org.springframework.util.LinkedMultiValueMap;

@@ -1,4 +1,4 @@
-package com.incoresoft.unknownlist.config;
+package com.incoresoft.dilijanCustomization.config;
 
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.web.client.RestTemplateBuilder;
