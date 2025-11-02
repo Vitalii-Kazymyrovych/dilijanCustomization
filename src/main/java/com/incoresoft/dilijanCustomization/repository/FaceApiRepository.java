@@ -35,7 +35,6 @@ public class FaceApiRepository {
                 .build()
                 .toUriString();
 
-        // Try #1 — EXACTLY like your working Swagger variant:
         // POST multipart/form-data with an *empty* multipart body (no parts)
         MultiValueMap<String, Object> emptyBody = new LinkedMultiValueMap<>();
         HttpHeaders headers = new HttpHeaders();

@@ -5,6 +5,7 @@ import com.incoresoft.dilijanCustomization.domain.unknown.dto.*;
 import com.incoresoft.dilijanCustomization.repository.FaceApiRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -65,6 +66,7 @@ public class UnknownPersonService {
     }
 
     // nightly clean
+    @Scheduled(cron = "0 0 0 * * *")
     public void cleanUnknownList() {
         ListItemsResponse resp = repo.getListItems(faceProps.getUnknownListId(), "", "", 0, 500, "asc", "name");
         for (ListItemDto li : (resp.getData() == null ? List.<ListItemDto>of() : resp.getData())) {
