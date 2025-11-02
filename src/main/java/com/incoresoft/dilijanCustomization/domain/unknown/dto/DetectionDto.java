@@ -11,6 +11,8 @@ public class DetectionDto {
   private Long timestamp;
   @JsonProperty("analytics")
   private AnalyticsRef analytics; // to read stream_id
+    @JsonProperty("list_item")
+    private ListItemDto listItem;
     @JsonProperty("face_image")
     private String faceImage;
     @Data
