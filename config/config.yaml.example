@@ -17,11 +17,6 @@ vezha:
     # exclude these lists completely (case-insensitive names) (list)
     excluded-list-names: ["outsourced"]
 
-# (optional) logging
-logging:
-  level:
-    "com.incoresoft.dilijanCustomization": "INFO"
-
 # ====== Telegram ======
 telegram:
   bot:
