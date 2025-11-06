@@ -131,7 +131,12 @@ public class EvacuationBot extends TelegramLongPollingBot {
      */
     private void sendListSelection(Long chatId) throws TelegramApiException {
         FaceListsResponse response = faceApiRepository.getFaceLists(200);
-        List<FaceListDto> lists = response != null ? response.getData() : null;
+        List<FaceListDto> lists = response != null
+                ? response.getData()
+                .stream()
+                .filter(list -> list.getTimeAttendance().getEnabled() && list.getStatus().equals(1))
+                .toList()
+                : null;
         if (lists == null || lists.isEmpty()) {
             SendMessage msg = new SendMessage(chatId.toString(), "No lists available to report on.");
             execute(msg);

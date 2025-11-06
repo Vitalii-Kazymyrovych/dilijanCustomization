@@ -1,6 +1,7 @@
 package com.incoresoft.dilijanCustomization.domain.shared.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.incoresoft.dilijanCustomization.domain.unknown.dto.TimeAttendance;
 import lombok.Data;
 
 import java.util.List;
@@ -11,4 +12,6 @@ public class FaceListDto {
     @JsonProperty("name")  private String name;
     @JsonProperty("comment") private String comment;
     @JsonProperty("analytics_ids") private List<Long> analyticsIds;
+    @JsonProperty("status") private Integer status;
+    @JsonProperty("time_attendance") private TimeAttendance timeAttendance;
 }

@@ -9,8 +9,8 @@
         <relativePath/> <!-- lookup parent from repository -->
     </parent>
     <groupId>com.incoresoft</groupId>
-    <artifactId>dilijanCustomnization</artifactId>
-    <version>0.1</version>
+    <artifactId>dilijanCustomization</artifactId>
+    <version>1.0</version>
     <name>dilijanCustomization</name>
     <description>dilijanCustomization</description>
     <url/>
