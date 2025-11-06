@@ -3,6 +3,8 @@ package com.incoresoft.dilijanCustomization.domain.unknown.dto;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
 
+import java.util.List;
+
 @Data
 public class ListItemDto {
   @JsonProperty("id")
@@ -13,4 +15,6 @@ public class ListItemDto {
   private Long listId;
   @JsonProperty("comment")
   private String comment;
+  @JsonProperty("images")
+    private List<ListImage> images;
 }

@@ -6,6 +6,8 @@ import com.incoresoft.dilijanCustomization.domain.attendance.dto.FaceListsRespon
 import com.incoresoft.dilijanCustomization.domain.attendance.dto.UniquePeopleResponse;
 import com.incoresoft.dilijanCustomization.domain.unknown.dto.*;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.http.*;
 import org.springframework.stereotype.Repository;
 import org.springframework.util.LinkedMultiValueMap;
@@ -14,15 +16,20 @@ import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 
+@Slf4j
 @Repository
 @RequiredArgsConstructor
 public class FaceApiRepository {
     private final RestTemplate vezha;
     private final VezhaApiProps props;
     private final ObjectMapper mapper = new ObjectMapper();
+    private final RestTemplateBuilder restTemplateBuilder;
 
     // POST /face/detections (multipart: -F image=) + query params (limit, sort_order, start_date, end_date)
     public DetectionsResponse getRecentDetections(Integer limit, String sortOrder, Long startTs, Long endTs) {
@@ -172,5 +179,88 @@ public class FaceApiRepository {
             offset += pageLimit;
         }
         return all;
+    }
+
+
+    /**
+     * Presence CSV for the exact moment:
+     * GET /api/face/reports/presence?list_id=...&start_date=ts&end_date=ts
+     * Accept: application/octet-stream
+     */
+    public String downloadPresenceCsv(Long listId, long exactMillis) {
+        long startMillis = exactMillis - Duration.ofDays(30).toMillis();
+        String url = UriComponentsBuilder
+                .fromHttpUrl(props.getBaseUrl())
+                .path("/face/reports/presence")
+                .queryParam("list_id", listId)
+                .queryParam("start_date", startMillis)
+                .queryParam("end_date", exactMillis)
+                .build()
+                .toUriString();
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setAccept(List.of(MediaType.APPLICATION_OCTET_STREAM, MediaType.ALL));
+        HttpEntity<Void> req = new HttpEntity<>(headers);
+
+        ResponseEntity<byte[]> resp = vezha.exchange(url, HttpMethod.GET, req, byte[].class);
+        return (resp.getBody() != null) ? new String(resp.getBody(), StandardCharsets.UTF_8) : "";
+    }
+
+    public byte[] downloadStorageObject(String imagePath) {
+        if (imagePath == null || imagePath.isBlank()) return new byte[0];
+
+        // If caller passed a full URL (http/https), use as-is
+        String url;
+        if (imagePath.startsWith("http://") || imagePath.startsWith("https://")) {
+            url = imagePath;
+        } else {
+            // Derive the server root from baseUrl (which is typically http://host:2001/api)
+            // We want http://host:2001/storage/<relative-path>
+            // 1) Strip a trailing "/api" if present
+            String base = props.getBaseUrl().replaceFirst("/api/?$", "");
+            // 2) Build /storage/<path> ensuring there's exactly one slash
+            url = UriComponentsBuilder
+                    .fromHttpUrl(base)
+                    .path("/storage/")
+                    .path(imagePath.startsWith("/") ? imagePath.substring(1) : imagePath)
+                    .build()
+                    .toUriString();
+        }
+
+        // Build a plain RestTemplate (no JSON-only interceptor)
+        var rest = restTemplateBuilder.build();
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setAccept(List.of(
+                MediaType.parseMediaType("image/avif"),
+                MediaType.parseMediaType("image/webp"),
+                MediaType.parseMediaType("image/apng"),
+                MediaType.parseMediaType("image/svg+xml"),
+                MediaType.IMAGE_JPEG,
+                MediaType.IMAGE_PNG,
+                MediaType.ALL
+        ));
+        // Send Bearer in case storage is protected by token
+        headers.set(HttpHeaders.AUTHORIZATION, "Bearer " + props.getToken());
+
+        HttpEntity<Void> req = new HttpEntity<>(headers);
+
+        try {
+            ResponseEntity<byte[]> resp = rest.exchange(url, HttpMethod.GET, req, byte[].class);
+            return Optional.ofNullable(resp.getBody()).orElse(new byte[0]);
+        } catch (HttpClientErrorException.Unauthorized | HttpClientErrorException.Forbidden e) {
+            // Some deployments allow public GET /storage/... (no Authorization)
+            try {
+                HttpEntity<Void> noAuthReq = new HttpEntity<>(new HttpHeaders() {{
+                    setAccept(headers.getAccept());
+                }});
+                ResponseEntity<byte[]> resp = rest.exchange(url, HttpMethod.GET, noAuthReq, byte[].class);
+                return Optional.ofNullable(resp.getBody()).orElse(new byte[0]);
+            } catch (Exception ex2) {
+                return new byte[0];
+            }
+        } catch (Exception ex) {
+            return new byte[0];
+        }
     }
 }
