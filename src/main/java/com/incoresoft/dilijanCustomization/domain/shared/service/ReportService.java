@@ -14,6 +14,7 @@ import org.springframework.util.StringUtils;
 
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -22,16 +23,23 @@ import java.util.Map;
 @Service
 @RequiredArgsConstructor
 public class ReportService {
+    private static final float ROW_HEIGHT_PT = 150f;
+    private static final int COL_WIDTH_CHECKBOX = 15 * 256;
+    private static final int COL_WIDTH_PHOTO   = 30 * 256;
+    private static final int COL_WIDTH_NAME    = 50 * 256;
+    private static final int COL_WIDTH_COMMENT = 50 * 256;
+    private static final String[] EVAC_OPTIONS = {"On site", "Evacuated"};
+    private static final List<String> COLUMNS = List.of("Category", "Breakfast", "Lunch", "Dinner", "Total");
 
-    // ===== Common / Cafeteria =====
+    private final FaceApiRepository repo;
 
     /**
      * Create a single-sheet XLSX with columns:
      * Category | Breakfast | Lunch | Dinner | Total
      */
-    public File exportCafeteriaPivot(LocalDate date, String sheetName, List<CafeteriaPivotRow> rows, File outFile) throws Exception {
+    public File exportCafeteriaPivot(LocalDate date, String sheetName, List<CafeteriaPivotRow> rows, File outFile) {
         try (Workbook wb = new XSSFWorkbook()) {
-            Sheet sh = wb.createSheet(sheetName == null || sheetName.isBlank() ? "Cafeteria" : sheetName);
+            Sheet sh = wb.createSheet(sheetName);
 
             // Simple styles
             CellStyle headerStyle = wb.createCellStyle();
@@ -39,20 +47,19 @@ public class ReportService {
             headerFont.setBold(true);
             headerStyle.setFont(headerFont);
 
-            int r = 0;
-
             // Header
-            Row header = sh.createRow(r++);
+            int raw_index = 0;
+            Row header = sh.createRow(raw_index++);
             header.setHeightInPoints(18f);
-            createCell(header, 0, "Category", headerStyle);
-            createCell(header, 1, "Breakfast", headerStyle);
-            createCell(header, 2, "Lunch", headerStyle);
-            createCell(header, 3, "Dinner", headerStyle);
-            createCell(header, 4, "Total", headerStyle);
+            int column_index = 0;
+            while (column_index < COLUMNS.size()) {
+                createCell(header, column_index, COLUMNS.get(column_index), headerStyle);
+                column_index++;
+            }
 
             // Body
             for (CafeteriaPivotRow rd : rows) {
-                Row row = sh.createRow(r++);
+                Row row = sh.createRow(raw_index++);
                 createCell(row, 0, rd.category(), null);
                 createNumericCell(row, 1, rd.breakfast(), null);
                 createNumericCell(row, 2, rd.lunch(), null);
@@ -61,7 +68,7 @@ public class ReportService {
             }
 
             // Grand total
-            Row totalRow = sh.createRow(r++);
+            Row totalRow = sh.createRow(raw_index++);
             createCell(totalRow, 0, "Grand Total", headerStyle);
             if (!rows.isEmpty()) {
                 int firstDataRow = 2; // header is row 1
@@ -82,29 +89,23 @@ public class ReportService {
 
             try (FileOutputStream fos = new FileOutputStream(outFile)) {
                 wb.write(fos);
+            } catch (IOException e) {
+                log.error("[CREATE ATTENDANCE REPORT]", e);
+                throw new RuntimeException(e);
             }
-            log.info("Excel written: {}", outFile.getAbsolutePath());
+            log.info("Attendance report written to excel: {}", outFile.getAbsolutePath());
+        } catch (IOException e) {
+            log.error("[CREATE ATTENDANCE REPORT]", e);
+            throw new RuntimeException(e);
         }
         return outFile;
     }
-
-    // ===== Evacuation =====
-
-    // Column defaults (moved here from EvacuationReportService)
-    private static final float ROW_HEIGHT_PT = 150f;
-    private static final int COL_WIDTH_CHECKBOX = 15 * 256;
-    private static final int COL_WIDTH_PHOTO   = 30 * 256;
-    private static final int COL_WIDTH_NAME    = 50 * 256;
-    private static final int COL_WIDTH_COMMENT = 50 * 256;
-    private static final String[] EVAC_OPTIONS = {"On site", "Evacuated"};
-
-    private final FaceApiRepository repo;
 
     /**
      * Build an XLSX with a sheet per list: [drop-down, Photo, Name, Comment].
      * Downloads and embeds the first image for each ListItemDto (if present).
      */
-    public File exportEvacuationWorkbook(Map<FaceListDto, List<ListItemDto>> data, File outFile) throws Exception {
+    public File exportEvacuationWorkbook(Map<FaceListDto, List<ListItemDto>> data, File outFile) {
         try (Workbook wb = new XSSFWorkbook()) {
             for (Map.Entry<FaceListDto, List<ListItemDto>> e : data.entrySet()) {
                 FaceListDto list = e.getKey();
@@ -181,6 +182,9 @@ public class ReportService {
             try (FileOutputStream fos = new FileOutputStream(outFile)) {
                 wb.write(fos);
             }
+        } catch (IOException e) {
+            log.error("[CREATE EVACUATION REPORT]", e);
+            throw new RuntimeException(e);
         }
         return outFile;
     }

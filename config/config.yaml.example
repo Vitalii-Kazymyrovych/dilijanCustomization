@@ -1,0 +1,29 @@
+# ====== VEZHA API ======
+vezha:
+  api:
+    base-url: "http://localhost:2001/api"
+    token: "YOUR TOKEN"
+
+  # ====== Cafeteria ======
+  cafe:
+    # absolute folder for XLSX output
+    output-dir: "C:/reports/cafeteria"
+    # analytics ID(s) used to count unique people (list)
+    analytics-ids: [2]
+    # local scheduling/meal-time timezone
+    timezone: "Asia/Yerevan"
+    # daily run time (22:00 local time)
+    schedule-cron: "0 0 22 * * *"
+    # exclude these lists completely (case-insensitive names) (list)
+    excluded-list-names: ["outsourced"]
+
+# (optional) logging
+logging:
+  level:
+    "com.incoresoft.dilijanCustomization": "INFO"
+
+# ====== Telegram ======
+telegram:
+  bot:
+    token: "YOUR TELEGRAM BOT TOKEN"
+    username: "YOUR TELEGRAM BOT USERNAME"

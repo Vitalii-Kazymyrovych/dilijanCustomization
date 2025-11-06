@@ -10,7 +10,6 @@ import org.springframework.http.*;
 import org.springframework.stereotype.Repository;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
-import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
@@ -40,11 +39,9 @@ public class FaceApiRepository {
                 .build()
                 .toUriString();
 
-        // POST multipart/form-data with an *empty* multipart body (no parts)
         HttpEntity<MultiValueMap<String, Object>> emptyReq = getRequestWithEmptyMultipart();
 
         try {
-            log.info("[GET DETECTIONS] {}", url);
             ResponseEntity<DetectionsResponse> resp =
                     vezhaApi.exchange(
                             vezhaApiProps.getBaseUrl() + url,
@@ -65,7 +62,6 @@ public class FaceApiRepository {
         HttpEntity<FromDetectionRequest> entity = new HttpEntity<>(request, headers);
         ResponseEntity<ListItemDto> resp;
         try {
-            log.info("[CREATE LIST ITEM] {}", entity.getBody().toString());
             resp =
                     vezhaApi.exchange(
                             vezhaApiProps.getBaseUrl() +
@@ -96,7 +92,6 @@ public class FaceApiRepository {
                 .build().toUriString();
         ResponseEntity<ListItemsResponse> resp;
         try {
-            log.info("[GET LIST ITEMS] {}", url);
             resp =
                     vezhaApi.exchange(
                             vezhaApiProps.getBaseUrl() + url,
@@ -113,7 +108,6 @@ public class FaceApiRepository {
     // DELETE /face/list_items/{id}
     public void deleteListItem(Long id) {
         try {
-            log.info("[DELETE LIST ITEM] {}", id);
             vezhaApi.delete(vezhaApiProps.getBaseUrl() + "/face/list_items/{id}", id);
         } catch (Exception e) {
             log.error("[DELETE LIST ITEM]", e);
@@ -130,7 +124,6 @@ public class FaceApiRepository {
 
         ResponseEntity<FaceListsResponse> resp;
         try {
-            log.info("[GET LISTS] {}", url);
             resp = vezhaApi.exchange(
                     vezhaApiProps.getBaseUrl() + url,
                     HttpMethod.GET,
@@ -152,30 +145,26 @@ public class FaceApiRepository {
             Integer offset,
             String sortOrder
     ) {
-        // Build URL: /face/detections?limit=...&offset=...&sort_order=...&start_date=...&end_date=...&list_id=...&analytics_ids=[2,3]
         UriComponentsBuilder b = UriComponentsBuilder
                 .fromPath("/face/detections")
                 .queryParam("limit",  limit == null ? 500 : limit)
                 .queryParam("sort_order", sortOrder == null ? "asc" : sortOrder);
 
-        if (offset != null)    b.queryParam("offset", offset);
+        if (offset != null)      b.queryParam("offset", offset);
         if (startMillis != null) b.queryParam("start_date", startMillis);
         if (endMillis != null)   b.queryParam("end_date",   endMillis);
         if (listId != null)      b.queryParam("list_id",    listId);
 
         if (analyticsIds != null && !analyticsIds.isEmpty()) {
-            // same style as swagger: "[2,3]"
             String encoded = "[" + analyticsIds.stream().map(String::valueOf).collect(java.util.stream.Collectors.joining(",")) + "]";
             b.queryParam("analytics_ids", encoded);
         }
 
         String url = b.build().toUriString();
 
-        // POST multipart/form-data with empty body (works with VEZHA)
         HttpEntity<MultiValueMap<String, Object>> req = getRequestWithEmptyMultipart();
 
         try {
-            log.info("[GET DETECTIONS] {}", url);
             ResponseEntity<DetectionsResponse> resp =
                     vezhaApi.exchange(
                             vezhaApiProps.getBaseUrl() + url,
@@ -239,7 +228,6 @@ public class FaceApiRepository {
 
         ResponseEntity<byte[]> resp;
         try {
-            log.info("[DOWNLOAD PRESENCE] {}", url);
             resp = vezhaApi.exchange(
                     vezhaApiProps.getBaseUrl() + url,
                     HttpMethod.GET,
@@ -255,18 +243,13 @@ public class FaceApiRepository {
     public byte[] downloadStorageObject(String imagePath) {
         if (imagePath == null || imagePath.isBlank()) return new byte[0];
 
-        // If caller passed a full URL (http/https), use as-is
         String url;
         String base;
         if (imagePath.startsWith("http://") || imagePath.startsWith("https://")) {
             base = "";
             url = imagePath;
         } else {
-            // Derive the server root from baseUrl (which is typically http://host:2001/api)
-            // We want http://host:2001/storage/<relative-path>
-            // 1) Strip a trailing "/api" if present
             base = vezhaApiProps.getBaseUrl().replaceFirst("/api/?$", "");
-            // 2) Build /storage/<path> ensuring there's exactly one slash
             url = UriComponentsBuilder
                     .fromPath("/storage/")
                     .path(imagePath.startsWith("/") ? imagePath.substring(1) : imagePath)
@@ -274,8 +257,7 @@ public class FaceApiRepository {
                     .toUriString();
         }
 
-        // Build a plain RestTemplate (no JSON-only interceptor)
-        var rest = restTemplateBuilder.build();
+        RestTemplate rest = restTemplateBuilder.build();
 
         HttpHeaders headers = new HttpHeaders();
         headers.setAccept(List.of(
@@ -287,13 +269,11 @@ public class FaceApiRepository {
                 MediaType.IMAGE_PNG,
                 MediaType.ALL
         ));
-        // Send Bearer in case storage is protected by token
         headers.set(HttpHeaders.AUTHORIZATION, "Bearer " + vezhaApiProps.getToken());
 
         HttpEntity<Void> req = new HttpEntity<>(headers);
 
         try {
-            log.info("[DOWNLOAD] {}", url);
             ResponseEntity<byte[]> resp = rest.exchange(
                     base + url,
                     HttpMethod.GET,
@@ -314,25 +294,23 @@ public class FaceApiRepository {
     }
 
     public long createFaceList(String name, String comment) {
-        // Build a payload compatible with VEZHA UI's POST (minimal but correct)
         var payload = CreateListRequest.builder()
                 .name(name)
                 .comment(comment == null ? "" : comment)
                 .color("#FFFFFF")
-                .minConfidence(80)                        // same default as UI
-                .status(1)                                // active
+                .minConfidence(80)
+                .status(1)
                 .sendInternalNotifications(true)
                 .showPopupForInternalNotifications(false)
-                .analyticsIds(null)                       // optional
+                .analyticsIds(null)
                 .timeAttendance(new TimeAttendance(false, List.of(), List.of()))
-                .accessRestrictions(AccessRestrictions.defaultOpen()) // open perms (like UI default)
+                .accessRestrictions(AccessRestrictions.defaultOpen())
                 .eventsHolder(new EventsHolder(false, List.of()))
                 .build();
 
         var entity = new HttpEntity<>(payload, headers());
-        ResponseEntity<FaceListDto> response = null;
+        ResponseEntity<FaceListDto> response;
         try {
-            log.info("[CREATE LIST] {}", name);
             response = vezhaApi.exchange(
                     vezhaApiProps.getBaseUrl() + "/face/lists",
                     HttpMethod.POST,
@@ -371,7 +349,6 @@ public class FaceApiRepository {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.MULTIPART_FORM_DATA);
         headers.setAccept(List.of(MediaType.APPLICATION_JSON));
-        HttpEntity<MultiValueMap<String, Object>> emptyReq = new HttpEntity<>(emptyBody, headers);
-        return emptyReq;
+        return new HttpEntity<>(emptyBody, headers);
     }
 }
