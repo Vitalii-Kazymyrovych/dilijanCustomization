@@ -2,6 +2,7 @@ package com.incoresoft.dilijanCustomization.repository;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.incoresoft.dilijanCustomization.config.VezhaApiProps;
+import com.incoresoft.dilijanCustomization.domain.attendance.dto.FaceListDto;
 import com.incoresoft.dilijanCustomization.domain.attendance.dto.FaceListsResponse;
 import com.incoresoft.dilijanCustomization.domain.attendance.dto.UniquePeopleResponse;
 import com.incoresoft.dilijanCustomization.domain.unknown.dto.*;
@@ -262,5 +263,47 @@ public class FaceApiRepository {
         } catch (Exception ex) {
             return new byte[0];
         }
+    }
+
+    public Optional<FaceListDto> findListByName(String name) {
+        return getFaceLists(100).getData()
+                .stream()
+                .filter(l -> l.getName() != null && l.getName().equalsIgnoreCase(name))
+                .findFirst();
+    }
+
+    public long createFaceList(String name, String comment) {
+        var url = props.getBaseUrl() + "/face/lists";
+
+        // Build a payload compatible with VEZHA UI's POST (minimal but correct)
+        var payload = CreateListRequest.builder()
+                .name(name)
+                .comment(comment == null ? "" : comment)
+                .color("#FFFFFF")
+                .minConfidence(80)                        // same default as UI
+                .status(1)                                // active
+                .sendInternalNotifications(true)
+                .showPopupForInternalNotifications(false)
+                .analyticsIds(null)                       // optional
+                .timeAttendance(new TimeAttendance(false, List.of(), List.of()))
+                .accessRestrictions(AccessRestrictions.defaultOpen()) // open perms (like UI default)
+                .eventsHolder(new EventsHolder(false, List.of()))
+                .build();
+
+        var entity = new HttpEntity<>(payload, headers());
+        var response = vezha.exchange(url, HttpMethod.POST, entity, FaceListDto.class);
+
+        if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
+            throw new IllegalStateException("Failed to create face list: HTTP " + response.getStatusCode());
+        }
+        return response.getBody().getId();
+    }
+
+    private HttpHeaders headers() {
+        var h = new HttpHeaders();
+        h.setContentType(MediaType.APPLICATION_JSON);
+        h.setAccept(List.of(MediaType.APPLICATION_JSON));
+        h.setBearerAuth(props.getToken());
+        return h;
     }
 }

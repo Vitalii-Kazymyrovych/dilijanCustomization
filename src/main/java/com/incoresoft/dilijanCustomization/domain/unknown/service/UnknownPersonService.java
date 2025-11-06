@@ -1,6 +1,6 @@
 package com.incoresoft.dilijanCustomization.domain.unknown.service;
 
-import com.incoresoft.dilijanCustomization.config.FaceProps;
+import com.incoresoft.dilijanCustomization.config.UnknownListRegistry;
 import com.incoresoft.dilijanCustomization.domain.unknown.dto.*;
 import com.incoresoft.dilijanCustomization.repository.FaceApiRepository;
 import lombok.RequiredArgsConstructor;
@@ -18,7 +18,8 @@ import java.util.Optional;
 public class UnknownPersonService {
 
     private final FaceApiRepository repo;
-    private final FaceProps faceProps;
+    private final UnknownListRegistry unknownListRegistry;
+
 
     // ADD flow
     public Optional<ListItemDto> handleEventAddIfUnknown(FaceEventDto event) {
@@ -45,7 +46,7 @@ public class UnknownPersonService {
 
         // 4) create list item
         ListItemDto item = repo.createListItemFromDetection(
-                new FromDetectionRequest(faceProps.getUnknownListId(), det.getId(), name, "auto-unknown"));
+                new FromDetectionRequest(unknownListRegistry.get(), det.getId(), name, "auto-unknown"));
         log.info("[ADD] created list_item id={}", item.getId());
 
         return Optional.ofNullable(item);
@@ -54,7 +55,7 @@ public class UnknownPersonService {
     // REMOVE flow
     public boolean handleEventRemoveIfUnknown(FaceEventDto event) {
         boolean target = event.isInList()
-                && Objects.equals(event.getFace().getListItem().getList().getId(), faceProps.getUnknownListId())
+                && Objects.equals(event.getFace().getListItem().getList().getId(), unknownListRegistry.get())
                 && event.getFace().getListItem().getId() != null;
         if (!target) {
             log.info("[REMOVE] Skip: not in unknown list or list_item_id missing");
@@ -68,7 +69,7 @@ public class UnknownPersonService {
     // nightly clean
     @Scheduled(cron = "0 0 0 * * *")
     public void cleanUnknownList() {
-        ListItemsResponse resp = repo.getListItems(faceProps.getUnknownListId(), "", "", 0, 500, "asc", "name");
+        ListItemsResponse resp = repo.getListItems(unknownListRegistry.get(), "", "", 0, 500, "asc", "name");
         for (ListItemDto li : (resp.getData() == null ? List.<ListItemDto>of() : resp.getData())) {
             try { repo.deleteListItem(li.getId()); }
             catch (Exception ex) { log.warn("Delete failed id={}: {}", li.getId(), ex.getMessage()); }
@@ -77,7 +78,7 @@ public class UnknownPersonService {
     }
 
     private String nextUnknownName() {
-        ListItemsResponse resp = repo.getListItems(faceProps.getUnknownListId(), "unknown", "", 0, 1, "asc", "name");
+        ListItemsResponse resp = repo.getListItems(unknownListRegistry.get(), "unknown", "", 0, 1, "asc", "name");
         int total = resp.getTotal() == null ? 0 : resp.getTotal();
         return "unknown" + (total + 1);
     }
