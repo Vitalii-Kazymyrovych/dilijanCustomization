@@ -19,7 +19,6 @@ public class HttpClientConfig {
             req.getHeaders().add("Accept", "application/json");
             return exec.execute(req, body);
         };
-        // TODO: understand why rootUri doesn't work
         return builder
                 .rootUri(props.getBaseUrl()) // http://localhost:2001/api
                 .additionalInterceptors(List.of(auth))

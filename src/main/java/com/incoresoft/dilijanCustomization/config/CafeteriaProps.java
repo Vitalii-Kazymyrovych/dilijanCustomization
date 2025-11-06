@@ -14,13 +14,13 @@ public class CafeteriaProps {
     /** Analytics to use, e.g. [2] */
     private List<Long> analyticsIds = new ArrayList<>();
     /** Local timezone for windows & schedule */
-    private String timezone = "Asia/Yerevan";
+    private String timezone;
     /** Cron for daily generation (local time) */
-    private String scheduleCron = "0 0 22 * * *";
+    private String scheduleCron;
     /** Absolute output folder for XLSX */
     private String outputDir;
     /** Lists to exclude by name (case-insensitive), e.g. outsourced/contractors */
-    private Set<String> excludedListNames = Set.of("outsourced");
+    private Set<String> excludedListNames;
     // Meal windows (local time)
     private LocalTime breakfastStart = LocalTime.of(6, 30);
     private LocalTime breakfastEnd   = LocalTime.of(10, 30);

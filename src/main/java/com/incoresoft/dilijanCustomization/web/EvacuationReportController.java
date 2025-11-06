@@ -1,6 +1,6 @@
 package com.incoresoft.dilijanCustomization.web;
 
-import com.incoresoft.dilijanCustomization.domain.evacuation.service.EvacuationReportService;
+import com.incoresoft.dilijanCustomization.domain.evacuation.EvacuationReportService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.FileSystemResource;

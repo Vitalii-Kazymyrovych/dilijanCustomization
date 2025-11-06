@@ -1,4 +1,4 @@
-package com.incoresoft.dilijanCustomization.domain.evacuation.service;
+package com.incoresoft.dilijanCustomization.domain.evacuation;
 
 import com.incoresoft.dilijanCustomization.domain.shared.dto.FaceListDto;
 import com.incoresoft.dilijanCustomization.domain.shared.dto.ListItemDto;

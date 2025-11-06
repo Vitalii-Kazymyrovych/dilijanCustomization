@@ -1,4 +1,3 @@
-// config/VezhaApiProps.java
 package com.incoresoft.dilijanCustomization.config;
 
 import lombok.Data;
