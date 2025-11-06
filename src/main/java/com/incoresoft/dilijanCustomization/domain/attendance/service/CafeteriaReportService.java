@@ -18,10 +18,17 @@ import org.springframework.util.StringUtils;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.nio.file.Files;
-import java.time.*;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.*;
 import java.util.stream.Collectors;
 
+/**
+ * Cafeteria attendance report:
+ * One sheet, per-list unique people counts for Breakfast / Lunch / Dinner.
+ * Deduplication key: list_item.id (unique within each time window independently).
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -30,7 +37,6 @@ public class CafeteriaReportService {
     private final CafeteriaProps cafe;
     private final FaceApiRepository repo;
 
-    // Nightly generation using properties (keep as you already configured)
     @Scheduled(cron = "${vezha.cafe.schedule-cron:0 0 22 * * *}", zone = "${vezha.cafe.timezone:Asia/Yerevan}")
     public void generateDaily() {
         try {
@@ -40,15 +46,13 @@ public class CafeteriaReportService {
         }
     }
 
-    // Default entry (scheduler): uses props timezone
     public File buildSingleDayReport(LocalDate date) throws Exception {
         return buildSingleDayReport(date, null, null);
     }
 
     /**
-     * Test-friendly variant with timezone override and optional filtering by list IDs.
-     * - tzOverride example: "Europe/Kyiv"
-     * - onlyListIds example: [2,5,7]; if null or empty => all lists (except excluded names)
+     * @param tzOverride e.g. "Europe/Kyiv" for testing; null -> props timezone
+     * @param onlyListIds restrict to these list IDs; null/empty -> all (minus excluded by name)
      */
     public File buildSingleDayReport(LocalDate date, String tzOverride, List<Long> onlyListIds) throws Exception {
         ZoneId zone = resolveZone(tzOverride);
@@ -60,63 +64,88 @@ public class CafeteriaReportService {
         long diStart = toMillis(date.atTime(cafe.getDinnerStart()),    zone);
         long diEnd   = toMillis(date.atTime(cafe.getDinnerEnd()),      zone);
 
-        // 1) All lists (id -> name) minus excluded by NAME; optionally restrict to onlyListIds
+        // id -> name (filtered by onlyListIds and excluded names)
         Map<Long, String> listIdToName = fetchListNames();
-        Set<String> excluded = cafe.getExcludedListNames().stream()
+        Set<String> excludedNames = cafe.getExcludedListNames().stream()
                 .map(s -> s.toLowerCase(Locale.ROOT).trim())
                 .collect(Collectors.toSet());
 
-        List<Long> targetListIds = listIdToName.keySet().stream()
-                .filter(id -> onlyListIds == null || onlyListIds.isEmpty() || onlyListIds.contains(id))
-                .filter(id -> !excluded.contains(listIdToName.get(id).toLowerCase(Locale.ROOT)))
+        List<Long> targetListIds = listIdToName.entrySet().stream()
+                .filter(e -> onlyListIds == null || onlyListIds.isEmpty() || onlyListIds.contains(e.getKey()))
+                .filter(e -> !excludedNames.contains(safeLower(e.getValue())))
+                .map(Map.Entry::getKey)
                 .sorted()
                 .collect(Collectors.toList());
 
-        // 2) Aggregate for each window using detections (listed only, unique by list_item.id)
-        Map<String,Integer> breakfast = aggregateListed(brStart, brEnd, targetListIds, listIdToName);
-        Map<String,Integer> lunch     = aggregateListed(luStart, luEnd, targetListIds, listIdToName);
-        Map<String,Integer> dinner    = aggregateListed(diStart, diEnd, targetListIds, listIdToName);
+        // Query unique list_item IDs per meal window (per-list)
+        Map<Long, Set<Long>> brUniques = queryUniqueListItemIds(brStart, brEnd, targetListIds);
+        Map<Long, Set<Long>> luUniques = queryUniqueListItemIds(luStart, luEnd, targetListIds);
+        Map<Long, Set<Long>> diUniques = queryUniqueListItemIds(diStart, diEnd, targetListIds);
 
-        // 3) Build XLSX
+        // Build pivot: list name -> [b,l,d,total]
+        List<RowData> rows = new ArrayList<>();
+        for (Long listId : targetListIds) {
+            String name = listIdToName.getOrDefault(listId, "list_" + listId);
+            int b = sizeOf(brUniques.get(listId));
+            int l = sizeOf(luUniques.get(listId));
+            int d = sizeOf(diUniques.get(listId));
+            rows.add(new RowData(name, b, l, d));
+        }
+        // Sort by name (case-insensitive)
+        rows.sort(Comparator.comparing(r -> r.category.toLowerCase(Locale.ROOT)));
+
+        // Create XLSX (single sheet)
         File outDir = new File(cafe.getOutputDir());
         Files.createDirectories(outDir.toPath());
         File out = new File(outDir, date.toString() + ".xlsx");
 
         try (Workbook wb = new XSSFWorkbook()) {
-            Sheet sh = wb.createSheet("Sheet1");
+            Sheet sh = wb.createSheet("Cafeteria");
             int r = 0;
 
+            // Header
             Row header = sh.createRow(r++);
             header.createCell(0).setCellValue("Category");
-            header.createCell(1).setCellValue("Amount of people");
+            header.createCell(1).setCellValue("Breakfast");
+            header.createCell(2).setCellValue("Lunch");
+            header.createCell(3).setCellValue("Dinner");
+            header.createCell(4).setCellValue("Total");
 
-            r = writeBlock(sh, r, "Breakfast", breakfast);
-            r = writeBlock(sh, r, "Lunch",     lunch);
-            r = writeBlock(sh, r, "Dinner",    dinner);
+            // Body
+            for (RowData rd : rows) {
+                Row row = sh.createRow(r++);
+                row.createCell(0).setCellValue(rd.category);
+                row.createCell(1).setCellValue(rd.breakfast);
+                row.createCell(2).setCellValue(rd.lunch);
+                row.createCell(3).setCellValue(rd.dinner);
+                row.createCell(4).setCellValue(rd.total());
+            }
 
-            sh.autoSizeColumn(0);
-            sh.autoSizeColumn(1);
+            // Grand total row
+            Row totalRow = sh.createRow(r++);
+            totalRow.createCell(0).setCellValue("Grand Total");
+            totalRow.createCell(1).setCellValue(rows.stream().mapToInt(rd -> rd.breakfast).sum());
+            totalRow.createCell(2).setCellValue(rows.stream().mapToInt(rd -> rd.lunch).sum());
+            totalRow.createCell(3).setCellValue(rows.stream().mapToInt(rd -> rd.dinner).sum());
+            totalRow.createCell(4).setCellValue(rows.stream().mapToInt(RowData::total).sum());
+
+            // Autosize
+            for (int c = 0; c <= 4; c++) sh.autoSizeColumn(c);
 
             try (FileOutputStream fos = new FileOutputStream(out)) {
                 wb.write(fos);
             }
         }
+
         log.info("Cafeteria report generated (tz={}): {}", zone, out.getAbsolutePath());
         return out;
     }
 
-    /** Listed-only aggregation: per list -> unique count of list_item.id */
-    private Map<String,Integer> aggregateListed(
-            long startMillis,
-            long endMillis,
-            List<Long> listIds,
-            Map<Long, String> listIdToName
-    ) {
-        Map<String, Set<Long>> uniquesByListName = new HashMap<>();
-
+    /** Query detections and return per-list unique list_item IDs for the window. */
+    private Map<Long, Set<Long>> queryUniqueListItemIds(long startMillis, long endMillis, List<Long> listIds) {
+        Map<Long, Set<Long>> uniquesByList = new HashMap<>();
         for (Long listId : listIds) {
-            String listName = listIdToName.getOrDefault(listId, "list_" + listId);
-
+            // Pull detections for this list within the window.
             List<DetectionDto> dets = repo.getAllDetectionsInWindow(
                     listId,
                     cafe.getAnalyticsIds(),
@@ -125,37 +154,16 @@ public class CafeteriaReportService {
                     500
             );
 
+            // Deduplicate by list_item.id
+            Set<Long> uniqueIds = uniquesByList.computeIfAbsent(listId, k -> new HashSet<>());
             for (DetectionDto d : dets) {
-                Long listItemId = (d.getListItem() != null)
-                        ? d.getListItem().getId() : null;
-                if (listItemId != null) {
-                    uniquesByListName.computeIfAbsent(listName, k -> new HashSet<>()).add(listItemId);
-                }
+                Long listItemId = (d.getListItem() != null) ? d.getListItem().getId() : null;
+                if (listItemId != null) uniqueIds.add(listItemId);
             }
         }
-
-        // convert Set sizes to counts and return alphabetical by name
-        Map<String,Integer> result = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
-        for (Map.Entry<String, Set<Long>> e : uniquesByListName.entrySet()) {
-            result.put(e.getKey(), e.getValue().size());
-        }
-        return result;
-    }
-
-    private int writeBlock(Sheet sh, int r, String title, Map<String,Integer> counts) {
-        Row head = sh.createRow(r++);
-        head.createCell(0).setCellValue(title);
-
-        // sorted by list name (already TreeMap, but safe to re-sort)
-        List<Map.Entry<String,Integer>> rows = new ArrayList<>(counts.entrySet());
-        rows.sort(Map.Entry.comparingByKey(String.CASE_INSENSITIVE_ORDER));
-
-        for (Map.Entry<String,Integer> e : rows) {
-            Row row = sh.createRow(r++);
-            row.createCell(0).setCellValue(e.getKey());
-            row.createCell(1).setCellValue(e.getValue());
-        }
-        return r;
+        // Ensure empty sets for lists with no detections (so they appear with zeros)
+        for (Long id : listIds) uniquesByList.computeIfAbsent(id, k -> new HashSet<>());
+        return uniquesByList;
     }
 
     private Map<Long, String> fetchListNames() {
@@ -164,7 +172,7 @@ public class CafeteriaReportService {
         if (lists != null && lists.getData() != null) {
             for (FaceListDto l : lists.getData()) {
                 if (l.getId() != null && StringUtils.hasText(l.getName())) {
-                    map.put(l.getId(), l.getName());
+                    map.put(l.getId(), l.getName().trim());
                 }
             }
         }
@@ -174,8 +182,9 @@ public class CafeteriaReportService {
     private ZoneId resolveZone(String tzOverride) {
         String cfg = cafe.getTimezone();
         if (!StringUtils.hasText(tzOverride)) return ZoneId.of(cfg);
-        try { return ZoneId.of(tzOverride.trim()); }
-        catch (Exception ex) {
+        try {
+            return ZoneId.of(tzOverride.trim());
+        } catch (Exception ex) {
             log.warn("Invalid tz '{}', falling back to props tz '{}': {}", tzOverride, cfg, ex.getMessage());
             return ZoneId.of(cfg);
         }
@@ -183,5 +192,22 @@ public class CafeteriaReportService {
 
     private static long toMillis(LocalDateTime ldt, ZoneId zone) {
         return ldt.atZone(zone).toInstant().toEpochMilli();
+    }
+
+    private static int sizeOf(Set<Long> s) { return (s == null) ? 0 : s.size(); }
+    private static String safeLower(String s) { return s == null ? "" : s.toLowerCase(Locale.ROOT).trim(); }
+
+    private static class RowData {
+        final String category;
+        final int breakfast;
+        final int lunch;
+        final int dinner;
+        RowData(String category, int breakfast, int lunch, int dinner) {
+            this.category = category;
+            this.breakfast = breakfast;
+            this.lunch = lunch;
+            this.dinner = dinner;
+        }
+        int total() { return breakfast + lunch + dinner; }
     }
 }
