@@ -2,7 +2,7 @@ package com.incoresoft.dilijanCustomization.web;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.incoresoft.dilijanCustomization.domain.unknown.dto.FaceEventDto;
-import com.incoresoft.dilijanCustomization.domain.unknown.dto.ListItemDto;
+import com.incoresoft.dilijanCustomization.domain.shared.dto.ListItemDto;
 import com.incoresoft.dilijanCustomization.domain.unknown.service.UnknownPersonService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.*;

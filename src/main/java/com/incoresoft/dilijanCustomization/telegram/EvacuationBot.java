@@ -1,7 +1,7 @@
 package com.incoresoft.dilijanCustomization.telegram;
 
-import com.incoresoft.dilijanCustomization.domain.attendance.dto.FaceListDto;
-    import com.incoresoft.dilijanCustomization.domain.attendance.dto.FaceListsResponse;
+import com.incoresoft.dilijanCustomization.domain.shared.dto.FaceListDto;
+    import com.incoresoft.dilijanCustomization.domain.shared.dto.FaceListsResponse;
 import com.incoresoft.dilijanCustomization.domain.evacuation.service.EvacuationReportService;
 import com.incoresoft.dilijanCustomization.repository.FaceApiRepository;
 import lombok.RequiredArgsConstructor;

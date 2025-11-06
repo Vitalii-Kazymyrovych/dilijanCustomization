@@ -2,9 +2,7 @@ package com.incoresoft.dilijanCustomization.repository;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.incoresoft.dilijanCustomization.config.VezhaApiProps;
-import com.incoresoft.dilijanCustomization.domain.attendance.dto.FaceListDto;
-import com.incoresoft.dilijanCustomization.domain.attendance.dto.FaceListsResponse;
-import com.incoresoft.dilijanCustomization.domain.attendance.dto.UniquePeopleResponse;
+import com.incoresoft.dilijanCustomization.domain.shared.dto.*;
 import com.incoresoft.dilijanCustomization.domain.unknown.dto.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

@@ -1,6 +1,10 @@
 package com.incoresoft.dilijanCustomization.domain.unknown.service;
 
 import com.incoresoft.dilijanCustomization.config.UnknownListRegistry;
+import com.incoresoft.dilijanCustomization.domain.shared.dto.DetectionDto;
+import com.incoresoft.dilijanCustomization.domain.shared.dto.DetectionsResponse;
+import com.incoresoft.dilijanCustomization.domain.shared.dto.ListItemDto;
+import com.incoresoft.dilijanCustomization.domain.shared.dto.ListItemsResponse;
 import com.incoresoft.dilijanCustomization.domain.unknown.dto.*;
 import com.incoresoft.dilijanCustomization.repository.FaceApiRepository;
 import lombok.RequiredArgsConstructor;
