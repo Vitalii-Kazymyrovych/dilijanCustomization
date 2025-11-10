@@ -119,6 +119,14 @@ public class EvacuationBot extends TelegramLongPollingBot {
                 SendMessage err = new SendMessage(chatId.toString(), "Failed to generate report: " + ex.getMessage());
                 execute(err);
             }
+        } else if ("GEN_ALL".equals(data)) {
+            try {
+                handleGenerateForAll(chatId);
+            } catch (Exception ex) {
+                SendMessage err = new SendMessage(chatId.toString(),
+                        "Failed to generate report for all lists: " + ex.getMessage());
+                execute(err);
+            }
         }
     }
 
@@ -131,17 +139,14 @@ public class EvacuationBot extends TelegramLongPollingBot {
      */
     private void sendListSelection(Long chatId) throws TelegramApiException {
         FaceListsResponse response = faceApiRepository.getFaceLists(200);
-        List<FaceListDto> lists = response != null
-                ? response.getData()
-                .stream()
-                .filter(list -> list.getTimeAttendance().getEnabled() && list.getStatus().equals(1))
-                .toList()
-                : null;
-        if (lists == null || lists.isEmpty()) {
+        List<FaceListDto> lists = filterReportableLists(response);
+
+        if (lists.isEmpty()) {
             SendMessage msg = new SendMessage(chatId.toString(), "No lists available to report on.");
             execute(msg);
             return;
         }
+
         SendMessage msg = new SendMessage();
         msg.setChatId(chatId.toString());
         msg.setText("Select lists for the evacuation report:");
@@ -157,8 +162,9 @@ public class EvacuationBot extends TelegramLongPollingBot {
      */
     private void editListSelection(Long chatId, Integer messageId, Set<Long> selected) throws TelegramApiException {
         FaceListsResponse response = faceApiRepository.getFaceLists(200);
-        List<FaceListDto> lists = response != null ? response.getData() : null;
-        if (lists == null) return;
+        List<FaceListDto> lists = filterReportableLists(response);
+        if (lists.isEmpty()) return;
+
         InlineKeyboardMarkup keyboard = buildKeyboard(lists, selected);
         EditMessageReplyMarkup edit = new EditMessageReplyMarkup();
         edit.setChatId(chatId.toString());
@@ -174,21 +180,29 @@ public class EvacuationBot extends TelegramLongPollingBot {
      */
     private InlineKeyboardMarkup buildKeyboard(List<FaceListDto> lists, Set<Long> selected) {
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-        // Build one button per list
-        for (FaceListDto list : lists) {
+
+        for (FaceListDto l : lists) {
+            boolean isSelected = selected != null && selected.contains(l.getId());
+            String text = (isSelected ? "✅ " : "☐ ") + l.getName();
+
             InlineKeyboardButton btn = new InlineKeyboardButton();
-            boolean isSelected = selected != null && selected.contains(list.getId());
-            // Prefix selected lists with a green check; otherwise leave box empty
-            String prefix = isSelected ? "✅ " : "☐ ";
-            btn.setText(prefix + list.getName());
-            btn.setCallbackData("toggle_" + list.getId());
-            rows.add(Collections.singletonList(btn));
+            btn.setText(text);
+            btn.setCallbackData("toggle_" + l.getId()); // <-- match handleCallback
+            rows.add(List.of(btn));
         }
-        // Generate button
+
+        // Add "Generate Report" (for selected)
         InlineKeyboardButton gen = new InlineKeyboardButton();
-        gen.setText("Generate Report");
+        gen.setText("🧾 Generate Report");
         gen.setCallbackData("generate");
-        rows.add(Collections.singletonList(gen));
+        rows.add(List.of(gen));
+
+        // LAST: "Generate for All Lists"
+        InlineKeyboardButton genAll = new InlineKeyboardButton();
+        genAll.setText("🚀 Generate for All Lists");
+        genAll.setCallbackData("GEN_ALL");
+        rows.add(List.of(genAll));
+
         InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
         markup.setKeyboard(rows);
         return markup;
@@ -202,5 +216,34 @@ public class EvacuationBot extends TelegramLongPollingBot {
     @Override
     public String getBotToken() {
         return botToken;
+    }
+
+    private List<FaceListDto> filterReportableLists(FaceListsResponse response) {
+        if (response == null || response.getData() == null) return Collections.emptyList();
+        return response.getData().stream()
+                .filter(l -> l != null)
+                .filter(l -> l.getStatus() != null && l.getStatus().equals(1))
+                .filter(l -> l.getTimeAttendance() != null && Boolean.TRUE.equals(l.getTimeAttendance().getEnabled()))
+                .sorted(Comparator.comparing(FaceListDto::getName, String.CASE_INSENSITIVE_ORDER)) // optional: nicer UX
+                .toList();
+    }
+
+    private void handleGenerateForAll(Long chatId) throws Exception {
+        FaceListsResponse response = faceApiRepository.getFaceLists(200);
+        List<FaceListDto> eligible = filterReportableLists(response);
+
+        if (eligible.isEmpty()) {
+            execute(new SendMessage(chatId.toString(), "No lists with reports enabled."));
+            return;
+        }
+
+        List<Long> allEligibleIds = eligible.stream().map(FaceListDto::getId).toList();
+
+        File report = reportService.buildEvacuationReport(allEligibleIds);
+        SendDocument doc = new SendDocument();
+        doc.setChatId(chatId.toString());
+        doc.setDocument(new InputFile(report));
+        doc.setCaption("Evacuation report (ALL enabled lists): " + allEligibleIds.size() + " lists");
+        execute(doc);
     }
 }
