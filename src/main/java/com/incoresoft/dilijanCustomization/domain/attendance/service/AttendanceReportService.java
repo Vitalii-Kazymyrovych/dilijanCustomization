@@ -24,7 +24,7 @@ import java.util.stream.Collectors;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class CafeteriaReportService {
+public class AttendanceReportService {
 
     private final CafeteriaProps cafe;
     private final FaceApiRepository repo;

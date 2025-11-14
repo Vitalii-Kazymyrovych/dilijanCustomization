@@ -1,6 +1,6 @@
 package com.incoresoft.dilijanCustomization.web;
 
-import com.incoresoft.dilijanCustomization.domain.attendance.service.CafeteriaReportService;
+import com.incoresoft.dilijanCustomization.domain.attendance.service.AttendanceReportService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.*;
@@ -15,7 +15,7 @@ import java.util.stream.Collectors;
 @RequestMapping("/cafeteria")
 @RequiredArgsConstructor
 public class CafeteriaReportController {
-    private final CafeteriaReportService service;
+    private final AttendanceReportService service;
 
     /**
      * Example:
