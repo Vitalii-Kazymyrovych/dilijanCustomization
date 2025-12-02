@@ -16,6 +16,10 @@ import java.util.*;
 
 /**
  * Gathers data for the evacuation report and delegates XLSX creation to ReportService.
+ * IMPORTANT:
+ *  - Presence CSV can contain multiple rows for the same employee.
+ *  - We must use ONLY the LAST record per employee (by row order in CSV)
+ *    to decide whether the person is currently present in the building.
  */
 @Slf4j
 @Service
@@ -30,6 +34,7 @@ public class EvacuationReportService {
             throw new IllegalArgumentException("listIds cannot be empty");
         }
 
+        // Stable order of sheets
         List<Long> sortedIds = new ArrayList<>(listIds);
         Collections.sort(sortedIds);
 
@@ -61,7 +66,6 @@ public class EvacuationReportService {
             data.put(faceList, presentItems);
         }
 
-        // Delegate XLSX generation (temp file here — adjust pathing if needed)
         File out = File.createTempFile("evacuation-", ".xlsx");
         return reportService.exportEvacuationWorkbook(data, out);
     }
@@ -79,42 +83,76 @@ public class EvacuationReportService {
         return (resp != null && resp.getData() != null) ? resp.getData() : List.of();
     }
 
-    /** Parse CSV and return a deduplicated set of lowercased "present" names (Employee column). */
+    /**
+     * Parse presence CSV and return a set of employee names (normalized, lower-cased),
+     * for which the LAST record in the CSV marks them as "present".
+     */
     private Set<String> parseCsvPresentNames(String csv) {
-        if (!StringUtils.hasText(csv)) return Set.of();
-        if (csv.startsWith("\uFEFF")) csv = csv.substring(1);
-
+        if (!StringUtils.hasText(csv)) {
+            return Set.of();
+        }
+        // Remove UTF-8 BOM if present
+        if (csv.startsWith("\uFEFF") || csv.startsWith("\ufeff")) {
+            csv = csv.substring(1);
+        }
         String[] lines = csv.split("\\r?\\n");
-        if (lines.length <= 1) return Set.of();
-
+        if (lines.length <= 1) {
+            return Set.of();
+        }
+        // --- Determine column indexes from header ---
         String[] header = lines[0].split(";");
-        int employeeIdx = -1, presentIdx = -1;
+        int employeeIdx = -1;
+        int presentIdx = -1;
         for (int i = 0; i < header.length; i++) {
             String col = header[i].trim().toLowerCase(Locale.ROOT);
-            if (employeeIdx < 0 && (col.contains("employee") || col.equals("name"))) employeeIdx = i;
-            if (presentIdx < 0 && col.contains("present")) presentIdx = i;
+            if (employeeIdx < 0 && (col.contains("employee") || col.equals("name"))) {
+                employeeIdx = i;
+            }
+            if (presentIdx < 0 && col.contains("present")) {
+                presentIdx = i;
+            }
         }
-        if (employeeIdx < 0) employeeIdx = 1;
-        if (presentIdx < 0) presentIdx = 2;
-
-        Set<String> result = new LinkedHashSet<>();
+        // Reasonable fallbacks if header names are unexpected
+        if (employeeIdx < 0) {
+            employeeIdx = 1;
+        }
+        if (presentIdx < 0) {
+            presentIdx = 2;
+        }
+        // Map: normalizedName -> last "present" flag
+        Map<String, Boolean> lastStatusByName = new LinkedHashMap<>();
         for (int i = 1; i < lines.length; i++) {
             String line = lines[i].trim();
-            if (line.isEmpty()) continue;
+            if (line.isEmpty()) {
+                continue;
+            }
             String[] parts = line.split(";");
-            if (parts.length <= Math.max(employeeIdx, presentIdx)) continue;
-
+            int maxIdx = Math.max(employeeIdx, presentIdx);
+            if (parts.length <= maxIdx) {
+                continue;
+            }
+            String rawName = parts[employeeIdx].trim();
+            if (rawName.isEmpty()) {
+                continue;
+            }
+            String normalizedName = normalizeName(rawName);
             String presentStr = parts[presentIdx].trim().toLowerCase(Locale.ROOT);
-            boolean present = presentStr.equals("true") || presentStr.equals("1") || presentStr.equals("yes") || presentStr.equals("да");
-            if (!present) continue;
-
-            String name = parts[employeeIdx].trim();
-            if (!name.isEmpty()) result.add(normalizeName(name));
+            boolean present = presentStr.equals("true");
+            lastStatusByName.put(normalizedName, present);
+        }
+        if (lastStatusByName.isEmpty()) {
+            return Set.of();
+        }
+        Set<String> result = new LinkedHashSet<>();
+        for (Map.Entry<String, Boolean> entry : lastStatusByName.entrySet()) {
+            if (Boolean.TRUE.equals(entry.getValue())) {
+                result.add(entry.getKey());
+            }
         }
         return result;
     }
 
     private String normalizeName(String s) {
-        return s == null ? "" : s.trim().toLowerCase(Locale.ROOT);
+        return (s == null) ? "" : s.trim().toLowerCase(Locale.ROOT);
     }
 }
