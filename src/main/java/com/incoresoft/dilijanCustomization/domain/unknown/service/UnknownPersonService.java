@@ -71,7 +71,7 @@ public class UnknownPersonService {
     }
 
     // nightly clean
-    @Scheduled(cron = "0 0 0 * * *")
+    @Scheduled(cron = "0 0 0 * * SUN")
     public void cleanUnknownList() {
         ListItemsResponse resp = repo.getListItems(unknownListRegistry.get(), "", "", 0, 500, "asc", "name");
         for (ListItemDto li : (resp.getData() == null ? List.<ListItemDto>of() : resp.getData())) {
