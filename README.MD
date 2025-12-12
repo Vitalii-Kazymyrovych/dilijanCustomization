@@ -75,7 +75,7 @@ Content-Disposition: attachment; filename="entry_exit_2025-11-01_to_2025-11-06.x
 **Request**
 
 ```http
-POST /cafeteria/build?date=2025-11-06&timezone=Europe/Yerevan&format=xlsx
+POST /cafeteria/build?date=2025-11-06&timezone=Europe/Kyiv&format=xlsx
 ```
 
 **Response (example)**

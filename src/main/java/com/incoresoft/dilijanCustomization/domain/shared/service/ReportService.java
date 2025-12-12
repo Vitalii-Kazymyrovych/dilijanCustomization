@@ -146,7 +146,6 @@ public class ReportService {
                         String firstImagePath = firstImagePath(item);
                         if (StringUtils.hasText(firstImagePath)) {
                             byte[] img = repo.downloadStorageObject(firstImagePath);
-                            System.out.println(Arrays.toString(img));
                             if (img != null && img.length > 0) {
                                 int picIdx = wb.addPicture(img, Workbook.PICTURE_TYPE_JPEG);
                                 CreationHelper helper = wb.getCreationHelper();

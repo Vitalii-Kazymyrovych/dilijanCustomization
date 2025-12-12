@@ -99,10 +99,13 @@ public class EvacuationReportService {
         if (lines.length <= 1) {
             return Set.of();
         }
+
         // --- Determine column indexes from header ---
         String[] header = lines[0].split(";");
         int employeeIdx = -1;
         int presentIdx = -1;
+        int tsIdx = -1;
+
         for (int i = 0; i < header.length; i++) {
             String col = header[i].trim().toLowerCase(Locale.ROOT);
             if (employeeIdx < 0 && (col.contains("employee") || col.equals("name"))) {
@@ -111,46 +114,106 @@ public class EvacuationReportService {
             if (presentIdx < 0 && col.contains("present")) {
                 presentIdx = i;
             }
+            if (tsIdx < 0 && (col.contains("timestamp") || col.contains("time") || col.contains("date") || col.contains("created"))) {
+                tsIdx = i;
+            }
         }
+
         // Reasonable fallbacks if header names are unexpected
-        if (employeeIdx < 0) {
-            employeeIdx = 1;
-        }
-        if (presentIdx < 0) {
-            presentIdx = 2;
-        }
-        // Map: normalizedName -> last "present" flag
-        Map<String, Boolean> lastStatusByName = new LinkedHashMap<>();
+        if (employeeIdx < 0) employeeIdx = 1;
+        if (presentIdx < 0)  presentIdx = 2;
+
+        // Parse rows, extract timestamps, sort chronologically, then take the last record per name.
+        List<PresenceRow> rows = new ArrayList<>();
         for (int i = 1; i < lines.length; i++) {
             String line = lines[i].trim();
-            if (line.isEmpty()) {
-                continue;
-            }
+            if (line.isEmpty()) continue;
+
             String[] parts = line.split(";");
             int maxIdx = Math.max(employeeIdx, presentIdx);
-            if (parts.length <= maxIdx) {
-                continue;
-            }
+            if (tsIdx >= 0) maxIdx = Math.max(maxIdx, tsIdx);
+            if (parts.length <= maxIdx) continue;
+
             String rawName = parts[employeeIdx].trim();
-            if (rawName.isEmpty()) {
-                continue;
-            }
+            if (rawName.isEmpty()) continue;
+
             String normalizedName = normalizeName(rawName);
-            String presentStr = parts[presentIdx].trim().toLowerCase(Locale.ROOT);
-            boolean present = presentStr.equals("true");
-            lastStatusByName.put(normalizedName, present);
-        }
-        if (lastStatusByName.isEmpty()) {
-            return Set.of();
-        }
-        Set<String> result = new LinkedHashSet<>();
-        for (Map.Entry<String, Boolean> entry : lastStatusByName.entrySet()) {
-            if (Boolean.TRUE.equals(entry.getValue())) {
-                result.add(entry.getKey());
+            boolean present = parts[presentIdx].trim().equalsIgnoreCase("true");
+
+            long ts = Long.MIN_VALUE;
+            if (tsIdx >= 0) {
+                ts = parseTimestampMillis(parts[tsIdx].trim());
             }
+            // If timestamp wasn't found/parsed, fall back to row order (still deterministic).
+            if (ts == Long.MIN_VALUE) {
+                ts = i;
+            }
+
+            rows.add(new PresenceRow(normalizedName, present, ts, i));
+        }
+
+        if (rows.isEmpty()) return Set.of();
+
+        // Sort by time ascending; tie-breaker: original row index.
+        rows.sort(Comparator
+                .comparingLong(PresenceRow::tsMillis)
+                .thenComparingInt(PresenceRow::rowIndex));
+
+        // Map: normalizedName -> last "present" flag (after chronological sort)
+        Map<String, Boolean> lastStatusByName = new LinkedHashMap<>();
+        for (PresenceRow r : rows) {
+            lastStatusByName.put(r.name(), r.present());
+        }
+
+        Set<String> result = new LinkedHashSet<>();
+        for (var e : lastStatusByName.entrySet()) {
+            if (Boolean.TRUE.equals(e.getValue())) result.add(e.getKey());
         }
         return result;
     }
+
+    /**
+     * Tries to parse different timestamp formats to epoch millis.
+     */
+    private long parseTimestampMillis(String raw) {
+        if (!StringUtils.hasText(raw)) return Long.MIN_VALUE;
+
+        String s = raw.trim();
+        if ((s.startsWith("\"") && s.endsWith("\"")) || (s.startsWith("'") && s.endsWith("'"))) {
+            s = s.substring(1, s.length() - 1).trim();
+        }
+
+        // 1) epoch millis / seconds
+        if (s.chars().allMatch(Character::isDigit)) {
+            try {
+                long v = Long.parseLong(s);
+                if (v > 0 && v < 100_000_000_000L) return v * 1000L; // seconds -> millis
+                return v; // already millis
+            } catch (NumberFormatException ignore) {}
+        }
+
+        // 2) ISO instant
+        try {
+            return Instant.parse(s).toEpochMilli();
+        } catch (Exception ignore) {}
+
+        // 3) Common local datetime patterns (assume UTC if no zone is provided)
+        List<java.time.format.DateTimeFormatter> fmts = List.of(
+                java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"),
+                java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss"),
+                java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss")
+        );
+        for (var fmt : fmts) {
+            try {
+                var ldt = java.time.LocalDateTime.parse(s, fmt);
+                return ldt.toInstant(java.time.ZoneOffset.UTC).toEpochMilli();
+            } catch (Exception ignore) {}
+        }
+
+        return Long.MIN_VALUE;
+    }
+
+    private record PresenceRow(String name, boolean present, long tsMillis, int rowIndex) {}
 
     private String normalizeName(String s) {
         return (s == null) ? "" : s.trim().toLowerCase(Locale.ROOT);
