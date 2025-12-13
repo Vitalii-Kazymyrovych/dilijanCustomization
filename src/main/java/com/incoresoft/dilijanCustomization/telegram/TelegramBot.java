@@ -53,7 +53,7 @@ public class TelegramBot extends TelegramLongPollingBot {
     private enum Mode { NONE, EVACUATION, ATTENDANCE }
     private final Map<Long, Mode> chatModes = new ConcurrentHashMap<>();
 
-    private static final ZoneId KYIV_TZ = ZoneId.of("Asia/Erevan");
+    private static final ZoneId KYIV_TZ = ZoneId.of("Asia/Yerevan");
     private static final DateTimeFormatter MM_DD_YYYY =
             DateTimeFormatter.ofPattern("MM/dd/uuuu").withResolverStyle(ResolverStyle.STRICT);
 
