@@ -2,10 +2,10 @@ package com.incoresoft.dilijanCustomization.domain.unknown.dto;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.incoresoft.dilijanCustomization.domain.shared.dto.TimeAttendance;
 import lombok.*;
 
 import java.util.List;
-import java.util.Map;
 
 @Data
 @Builder

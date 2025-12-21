@@ -16,7 +16,6 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.time.LocalDate;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
@@ -29,6 +28,8 @@ public class ReportService {
     private static final int COL_WIDTH_PHOTO   = 30 * 256;
     private static final int COL_WIDTH_NAME    = 50 * 256;
     private static final int COL_WIDTH_COMMENT = 50 * 256;
+    /** Width of the ID column in characters (scaled by 256 for POI). */
+    private static final int COL_WIDTH_ID      = 20 * 256;
     private static final String[] EVAC_OPTIONS = {"On site", "Evacuated"};
     private static final List<String> COLUMNS = List.of("Category", "Breakfast", "Lunch", "Dinner", "Total");
 
@@ -42,25 +43,23 @@ public class ReportService {
         try (Workbook wb = new XSSFWorkbook()) {
             Sheet sh = wb.createSheet(sheetName);
 
-            // Simple styles
+            // Header style
             CellStyle headerStyle = wb.createCellStyle();
             Font headerFont = wb.createFont();
             headerFont.setBold(true);
             headerStyle.setFont(headerFont);
 
             // Header
-            int raw_index = 0;
-            Row header = sh.createRow(raw_index++);
+            Row header = sh.createRow(0);
             header.setHeightInPoints(18f);
-            int column_index = 0;
-            while (column_index < COLUMNS.size()) {
-                createCell(header, column_index, COLUMNS.get(column_index), headerStyle);
-                column_index++;
+            for (int i = 0; i < COLUMNS.size(); i++) {
+                createCell(header, i, COLUMNS.get(i), headerStyle);
             }
 
             // Body
+            int rowIdx = 1;
             for (CafeteriaPivotRow rd : rows) {
-                Row row = sh.createRow(raw_index++);
+                Row row = sh.createRow(rowIdx++);
                 createCell(row, 0, rd.category(), null);
                 createNumericCell(row, 1, rd.breakfast(), null);
                 createNumericCell(row, 2, rd.lunch(), null);
@@ -69,7 +68,7 @@ public class ReportService {
             }
 
             // Grand total
-            Row totalRow = sh.createRow(raw_index++);
+            Row totalRow = sh.createRow(rowIdx);
             createCell(totalRow, 0, "Grand Total", headerStyle);
             if (!rows.isEmpty()) {
                 int firstDataRow = 2; // header is row 1
@@ -90,9 +89,6 @@ public class ReportService {
 
             try (FileOutputStream fos = new FileOutputStream(outFile)) {
                 wb.write(fos);
-            } catch (IOException e) {
-                log.error("[CREATE ATTENDANCE REPORT]", e);
-                throw new RuntimeException(e);
             }
             log.info("Attendance report written to excel: {}", outFile.getAbsolutePath());
         } catch (IOException e) {
@@ -103,7 +99,7 @@ public class ReportService {
     }
 
     /**
-     * Build an XLSX with a sheet per list: [drop-down, Photo, Name, Comment].
+     * Build an XLSX with a sheet per list: Status | Photo | ID | Name | Comment.
      * Downloads and embeds the first image for each ListItemDto (if present).
      */
     public File exportEvacuationWorkbook(Map<FaceListDto, List<ListItemDto>> data, File outFile) {
@@ -117,31 +113,34 @@ public class ReportService {
                 );
                 Sheet sh = wb.createSheet(sheetName);
 
-                // Header
+                // Header: Status, Photo, ID, Name, Comment
                 Row header = sh.createRow(0);
-                header.createCell(0).setCellValue(" ");
+                header.createCell(0).setCellValue("Status");
                 header.createCell(1).setCellValue("Photo");
-                header.createCell(2).setCellValue("Name");
-                header.createCell(3).setCellValue("Comment");
+                header.createCell(2).setCellValue("ID");
+                header.createCell(3).setCellValue("Name");
+                header.createCell(4).setCellValue("Comment");
+
                 sh.setDefaultRowHeightInPoints(ROW_HEIGHT_PT);
                 sh.setColumnWidth(0, COL_WIDTH_CHECKBOX);
                 sh.setColumnWidth(1, COL_WIDTH_PHOTO);
-                sh.setColumnWidth(2, COL_WIDTH_NAME);
-                sh.setColumnWidth(3, COL_WIDTH_COMMENT);
+                sh.setColumnWidth(2, COL_WIDTH_ID);
+                sh.setColumnWidth(3, COL_WIDTH_NAME);
+                sh.setColumnWidth(4, COL_WIDTH_COMMENT);
                 header.setHeightInPoints(24f);
 
                 Drawing<?> drawing = sh.createDrawingPatriarch();
-                int r = 1;
 
+                int r = 1;
                 for (ListItemDto item : items) {
                     Row row = sh.createRow(r);
 
-                    // A: drop-down default value + centering
-                    Cell c0 = row.createCell(0);
-                    c0.setCellValue("On site");
-                    c0.setCellStyle(checkboxColumnStyle(wb));
+                    // Status drop-down with default "On site"
+                    Cell statusCell = row.createCell(0);
+                    statusCell.setCellValue("On site");
+                    statusCell.setCellStyle(checkboxColumnStyle(wb));
 
-                    // B: Photo
+                    // Photo
                     try {
                         String firstImagePath = firstImagePath(item);
                         if (StringUtils.hasText(firstImagePath)) {
@@ -162,17 +161,26 @@ public class ReportService {
                         log.debug("Photo embedding failed for list {} item {}: {}", list.getId(), item.getId(), ex.getMessage());
                     }
 
-                    // C: Name, D: Comment
-                    row.createCell(2).setCellValue(nullSafe(item.getName()));
-                    row.createCell(3).setCellValue(nullSafe(item.getComment()));
+                    // ID
+                    Cell idCell = row.createCell(2);
+                    if (item.getId() != null) {
+                        idCell.setCellValue(item.getId());
+                    }
+
+                    // Name
+                    row.createCell(3).setCellValue(nullSafe(item.getName()));
+
+                    // Comment
+                    row.createCell(4).setCellValue(nullSafe(item.getComment()));
 
                     r++;
                 }
 
-                // Drop-down on A column (data rows only)
+                // Drop-down on Status column for data rows
                 DataValidationHelper dvHelper = sh.getDataValidationHelper();
                 DataValidationConstraint dvConstraint = dvHelper.createExplicitListConstraint(EVAC_OPTIONS);
-                CellRangeAddressList addressList = new CellRangeAddressList(1, Math.max(1, sh.getLastRowNum()), 0, 0);
+                CellRangeAddressList addressList =
+                        new CellRangeAddressList(1, Math.max(1, sh.getLastRowNum()), 0, 0);
                 DataValidation validation = dvHelper.createValidation(dvConstraint, addressList);
                 validation.setSuppressDropDownArrow(false);
                 validation.setEmptyCellAllowed(true);
@@ -190,8 +198,7 @@ public class ReportService {
         return outFile;
     }
 
-    // ===== Helpers =====
-
+    // Helpers for cell creation, sheet naming and styling
     private static void createCell(Row row, int col, String value, CellStyle style) {
         Cell cell = row.createCell(col, CellType.STRING);
         cell.setCellValue(value == null ? "" : value);
@@ -224,7 +231,6 @@ public class ReportService {
         return cs;
     }
 
-    // NOTE: adjust if your ListItemDto image model differs
     private static String firstImagePath(ListItemDto item) {
         try {
             if (item.getImages() != null && !item.getImages().isEmpty()) {

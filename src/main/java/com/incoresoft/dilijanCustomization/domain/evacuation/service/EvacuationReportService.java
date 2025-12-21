@@ -1,4 +1,4 @@
-package com.incoresoft.dilijanCustomization.domain.evacuation;
+package com.incoresoft.dilijanCustomization.domain.evacuation.service;
 
 import com.incoresoft.dilijanCustomization.domain.shared.dto.FaceListDto;
 import com.incoresoft.dilijanCustomization.domain.shared.dto.ListItemDto;
@@ -32,45 +32,24 @@ public class EvacuationReportService {
 
     private final FaceApiRepository repo;
     private final ReportService reportService;
+    private final EvacuationStatusService evacuationStatusService;
 
     public File buildEvacuationReport(List<Long> listIds) throws Exception {
-        if (listIds == null || listIds.isEmpty()) {
-            throw new IllegalArgumentException("listIds cannot be empty");
-        }
-
-        // Stable order of sheets
         List<Long> sortedIds = new ArrayList<>(listIds);
         Collections.sort(sortedIds);
-
         Map<FaceListDto, List<ListItemDto>> data = new LinkedHashMap<>();
-        long now = Instant.now().toEpochMilli();
-
         for (Long listId : sortedIds) {
-            FaceListDto faceList = fetchFaceListMeta(listId).orElse(null);
-            if (faceList == null) {
-                log.warn("List {} not found in FaceLists response; skipping", listId);
-                continue;
-            }
-
-            String csv = repo.downloadPresenceCsv(listId, now);
-            Map<String, List<EvacRecord>> recordsByEmployee = parsePresenceCsv(csv);
-            Set<String> presentNames = resolvePresentNames(recordsByEmployee);
-            if (presentNames.isEmpty()) {
-                data.put(faceList, List.of());
-                continue;
-            }
-
-            List<ListItemDto> allItems = fetchAllListItems(listId);
-
-            List<ListItemDto> presentItems = allItems.stream()
-                    .filter(it -> StringUtils.hasText(it.getName()))
-                    .filter(it -> presentNames.contains(normalizeName(it.getName())))
-                    .sorted(Comparator.comparing(li -> li.getName().toLowerCase(Locale.ROOT)))
+            FaceListDto listMeta = fetchFaceListMeta(listId).orElse(null);
+            if (listMeta == null) continue;
+            // Получаем ID list_item_id со статусом true из БД через JPA-сервис
+            Set<Long> activeIds = evacuationStatusService.getActiveListItemIds(listId);
+            List<ListItemDto> all = fetchAllListItems(listId);
+            List<ListItemDto> present = all.stream()
+                    .filter(it -> it.getId() != null && activeIds.contains(it.getId()))
+                    .sorted(Comparator.comparing(li -> Optional.ofNullable(li.getName()).orElse("").toLowerCase(Locale.ROOT)))
                     .toList();
-
-            data.put(faceList, presentItems);
+            data.put(listMeta, present);
         }
-
         File out = File.createTempFile("evacuation-", ".xlsx");
         return reportService.exportEvacuationWorkbook(data, out);
     }

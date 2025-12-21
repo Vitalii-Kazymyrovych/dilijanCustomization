@@ -1,11 +1,11 @@
 package com.incoresoft.dilijanCustomization.telegram;
 
 import com.incoresoft.dilijanCustomization.domain.attendance.service.AttendanceReportService;
-import com.incoresoft.dilijanCustomization.domain.evacuation.EvacuationReportService;
+import com.incoresoft.dilijanCustomization.domain.evacuation.service.EvacuationReportService;
+import com.incoresoft.dilijanCustomization.domain.evacuation.service.EvacuationStatusService;
 import com.incoresoft.dilijanCustomization.domain.shared.dto.FaceListDto;
 import com.incoresoft.dilijanCustomization.domain.shared.dto.FaceListsResponse;
 import com.incoresoft.dilijanCustomization.repository.FaceApiRepository;
-
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -44,12 +44,12 @@ public class TelegramBot extends TelegramLongPollingBot {
 
     private final FaceApiRepository faceApiRepository;
     private final EvacuationReportService reportService;
-    private final AttendanceReportService attendanceReportService; // Attendance reports
+    private final AttendanceReportService attendanceReportService;
+    private final EvacuationStatusService evacuationStatusService;
 
-    /** Per-chat “selected lists” for evacuation. */
+    /** Выбранные списки на пользователя. */
     private final Map<Long, Set<Long>> chatSelections = new ConcurrentHashMap<>();
-
-    /** Simple per-chat mode switching. */
+    /** Текущий режим для каждого чата. */
     private enum Mode { NONE, EVACUATION, ATTENDANCE }
     private final Map<Long, Mode> chatModes = new ConcurrentHashMap<>();
 
@@ -61,6 +61,11 @@ public class TelegramBot extends TelegramLongPollingBot {
     public void onUpdateReceived(Update update) {
         if (update == null) return;
         try {
+            // Обработка загруженного пользователем документа: парсинг и обновление статусов
+            if (update.getMessage() != null && update.getMessage().hasDocument()) {
+                handleIncomingDocument(update);
+                return;
+            }
             if (update.hasMessage() && update.getMessage().hasText()) {
                 handleIncomingText(update);
             } else if (update.hasCallbackQuery()) {
@@ -71,7 +76,7 @@ public class TelegramBot extends TelegramLongPollingBot {
         }
     }
 
-    /** Handle plain text messages (including /start, mode buttons, and attendance date input). */
+    /** Обработка текстовых сообщений (в т.ч. /start, выбор режима, ввод даты) */
     private void handleIncomingText(Update update) throws TelegramApiException {
         Long chatId = update.getMessage().getChatId();
         String text = update.getMessage().getText();
@@ -82,11 +87,9 @@ public class TelegramBot extends TelegramLongPollingBot {
             sendStartMenu(chatId);
             return;
         }
-
-        // Start menu buttons (ReplyKeyboard)
         if ("Evacuation".equalsIgnoreCase(text)) {
             chatModes.put(chatId, Mode.EVACUATION);
-            sendListSelection(chatId); // existing evacuation menu
+            sendListSelection(chatId);
             return;
         }
         if ("Attendance".equalsIgnoreCase(text)) {
@@ -94,8 +97,7 @@ public class TelegramBot extends TelegramLongPollingBot {
             sendAttendanceMenu(chatId);
             return;
         }
-
-        // While in ATTENDANCE mode: interpret text as date (ONLY MM/DD/YYYY), else hint.
+        // Если режим ATTENDANCE, пробуем разобрать дату
         if (chatModes.getOrDefault(chatId, Mode.NONE) == Mode.ATTENDANCE) {
             LocalDate parsed = parseMmDdYyyy(text);
             if (parsed != null) {
@@ -116,12 +118,11 @@ public class TelegramBot extends TelegramLongPollingBot {
             }
             return;
         }
-
-        // Fallback help
+        // Иначе выводим подсказку
         execute(new SendMessage(chatId.toString(), "Send /start to begin."));
     }
 
-    /** Handle all callback buttons (evacuation + attendance). */
+    /** Обработка callback-кнопок (переключение списков, генерация отчётов) */
     private void handleCallback(CallbackQuery callback) throws TelegramApiException {
         String data = callback.getData();
         if (data == null) return;
@@ -130,20 +131,19 @@ public class TelegramBot extends TelegramLongPollingBot {
         Integer messageId = callback.getMessage().getMessageId();
 
         if (data.startsWith("toggle_")) {
-            // Evacuation list toggle
             try {
                 Long listId = Long.valueOf(data.substring("toggle_".length()));
                 chatSelections.computeIfAbsent(chatId, k -> ConcurrentHashMap.newKeySet());
                 Set<Long> selected = chatSelections.get(chatId);
-                if (selected.contains(listId)) selected.remove(listId); else selected.add(listId);
+                if (selected.contains(listId)) selected.remove(listId);
+                else selected.add(listId);
                 editListSelection(chatId, messageId, selected);
             } catch (NumberFormatException ex) {
                 log.warn("Invalid toggle callback data: {}", data);
             }
             return;
         }
-
-        // Evacuation: generate for selected
+        // Генерация отчёта по выбранным спискам
         if ("generate".equals(data)) {
             Set<Long> selected = chatSelections.getOrDefault(chatId, Collections.emptySet());
             if (selected.isEmpty()) {
@@ -161,8 +161,7 @@ public class TelegramBot extends TelegramLongPollingBot {
             }
             return;
         }
-
-        // Evacuation: generate for ALL eligible lists
+        // Генерация отчёта для всех подходящих списков
         if ("GEN_ALL".equals(data)) {
             try {
                 handleGenerateForAll(chatId);
@@ -171,8 +170,7 @@ public class TelegramBot extends TelegramLongPollingBot {
             }
             return;
         }
-
-        // Attendance: today / yesterday
+        // Attendance: сегодня/вчера
         if ("ATT_TODAY".equals(data)) {
             try {
                 sendStarted(chatId);
@@ -194,7 +192,7 @@ public class TelegramBot extends TelegramLongPollingBot {
         }
     }
 
-    /** Sends the /start menu with two horizontal buttons: Evacuation | Attendance. */
+    // Отправка стартового меню
     private void sendStartMenu(Long chatId) throws TelegramApiException {
         ReplyKeyboardMarkup kb = new ReplyKeyboardMarkup();
         kb.setResizeKeyboard(true);
@@ -211,25 +209,20 @@ public class TelegramBot extends TelegramLongPollingBot {
         execute(msg);
     }
 
-    /* ========================= Evacuation UI ========================= */
-
-    /** Show filtered lists (reports enabled + status==1) with toggle, Generate, and Generate All. */
+    // ------ Меню для Evacuation ------
     private void sendListSelection(Long chatId) throws TelegramApiException {
         FaceListsResponse response = faceApiRepository.getFaceLists(200);
         List<FaceListDto> lists = filterReportableLists(response);
-
         if (lists.isEmpty()) {
             execute(new SendMessage(chatId.toString(), "No lists available to report on."));
             return;
         }
-
         SendMessage msg = new SendMessage(chatId.toString(), "Select lists for the evacuation report:");
         InlineKeyboardMarkup keyboard = buildEvacuationKeyboard(lists, chatSelections.getOrDefault(chatId, Collections.emptySet()));
         msg.setReplyMarkup(keyboard);
         execute(msg);
     }
 
-    /** Rebuild inline keyboard on toggle to reflect current selection. */
     private void editListSelection(Long chatId, Integer messageId, Set<Long> selected) throws TelegramApiException {
         FaceListsResponse response = faceApiRepository.getFaceLists(200);
         List<FaceListDto> lists = filterReportableLists(response);
@@ -243,10 +236,8 @@ public class TelegramBot extends TelegramLongPollingBot {
         execute(edit);
     }
 
-    /** Build evacuation keyboard: per-list toggles, Generate, and (last) Generate for All Lists. */
     private InlineKeyboardMarkup buildEvacuationKeyboard(List<FaceListDto> lists, Set<Long> selected) {
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-
         for (FaceListDto l : lists) {
             boolean isSelected = selected != null && selected.contains(l.getId());
             String name = l.getName() != null ? l.getName() : ("List " + l.getId());
@@ -255,17 +246,14 @@ public class TelegramBot extends TelegramLongPollingBot {
 
             InlineKeyboardButton btn = new InlineKeyboardButton();
             btn.setText(text);
-            btn.setCallbackData("toggle_" + l.getId()); // matches handler
+            btn.setCallbackData("toggle_" + l.getId());
             rows.add(List.of(btn));
         }
-
-        // Generate for selected
         InlineKeyboardButton gen = new InlineKeyboardButton();
         gen.setText("🧾 Generate Report");
         gen.setCallbackData("generate");
         rows.add(List.of(gen));
 
-        // LAST: Generate for ALL enabled lists
         InlineKeyboardButton genAll = new InlineKeyboardButton();
         genAll.setText("🚀 Generate for All Lists");
         genAll.setCallbackData("GEN_ALL");
@@ -276,7 +264,6 @@ public class TelegramBot extends TelegramLongPollingBot {
         return markup;
     }
 
-    /** Shared filter used in menus and All-Lists generation. */
     private List<FaceListDto> filterReportableLists(FaceListsResponse response) {
         if (response == null || response.getData() == null) return Collections.emptyList();
         return response.getData().stream()
@@ -287,16 +274,13 @@ public class TelegramBot extends TelegramLongPollingBot {
                 .toList();
     }
 
-    /** Generate evacuation report for ALL eligible lists. */
     private void handleGenerateForAll(Long chatId) throws Exception {
         FaceListsResponse response = faceApiRepository.getFaceLists(200);
         List<FaceListDto> eligible = filterReportableLists(response);
-
         if (eligible.isEmpty()) {
             execute(new SendMessage(chatId.toString(), "No lists with reports enabled."));
             return;
         }
-
         List<Long> allIds = eligible.stream().map(FaceListDto::getId).toList();
         File report = reportService.buildEvacuationReport(allIds);
 
@@ -305,9 +289,7 @@ public class TelegramBot extends TelegramLongPollingBot {
         execute(doc);
     }
 
-    /* ========================= Attendance UI ========================= */
-
-    /** Attendance entry message + inline buttons Today / Yesterday and text instructions. */
+    // ------ Attendance ------
     private void sendAttendanceMenu(Long chatId) throws TelegramApiException {
         String text = """
                 Attendance report:
@@ -315,7 +297,6 @@ public class TelegramBot extends TelegramLongPollingBot {
                 • Or type a date in this format:
                   MM/DD/YYYY (e.g., 11/10/2025)
                 """;
-
         InlineKeyboardButton today = new InlineKeyboardButton();
         today.setText("Today");
         today.setCallbackData("ATT_TODAY");
@@ -325,48 +306,131 @@ public class TelegramBot extends TelegramLongPollingBot {
         yesterday.setCallbackData("ATT_YESTERDAY");
 
         InlineKeyboardMarkup kb = new InlineKeyboardMarkup();
-        kb.setKeyboard(List.of(List.of(today, yesterday))); // horizontal row
+        kb.setKeyboard(List.of(List.of(today, yesterday)));
 
         SendMessage msg = new SendMessage(chatId.toString(), text);
         msg.setReplyMarkup(kb);
         execute(msg);
     }
 
-    /** Small helper: send a "started" notice before building attendance report. */
     private void sendStarted(Long chatId) throws TelegramApiException {
         execute(new SendMessage(chatId.toString(), "Started Report Creation. Wait a minute."));
     }
 
-    /** Generate attendance (cafeteria) report for a given date and send it. */
     private void generateAttendanceForDate(Long chatId, LocalDate date) throws Exception {
-        // Adjust if your AttendanceReportService signature differs.
         File report = attendanceReportService.buildSingleDayReport(date);
-
         SendDocument doc = new SendDocument(chatId.toString(), new InputFile(report));
         doc.setCaption("Attendance report for " + date.format(MM_DD_YYYY));
         execute(doc);
     }
 
-    /** Accept ONLY MM/DD/YYYY. */
+    /**
+     * Обрабатывает загруженный отчёт об эвакуации. Парсит XLSX и обновляет статусы.
+     */
+    private void handleIncomingDocument(Update update) {
+        var msg = update.getMessage();
+        if (msg == null || msg.getDocument() == null) return;
+        Long chatId = msg.getChatId();
+        try {
+            org.telegram.telegrambots.meta.api.objects.Document doc = msg.getDocument();
+            org.telegram.telegrambots.meta.api.methods.GetFile getFile = new org.telegram.telegrambots.meta.api.methods.GetFile();
+            getFile.setFileId(doc.getFileId());
+            org.telegram.telegrambots.meta.api.objects.File tgFile = execute(getFile);
+            java.io.File tmp = downloadFile(tgFile);
+            int updatesCount = 0;
+            try (java.io.FileInputStream fis = new java.io.FileInputStream(tmp)) {
+                org.apache.poi.ss.usermodel.Workbook wb = org.apache.poi.ss.usermodel.WorkbookFactory.create(fis);
+                // Соотнесение названий листов и ID списков (по sanitize)
+                Map<String, Long> nameToId = new HashMap<>();
+                var listsResponse = faceApiRepository.getFaceLists(200);
+                var lists = filterReportableLists(listsResponse);
+                for (var list : lists) {
+                    String sheetName = sanitizeSheetName(list.getName() != null ? list.getName() : ("List_" + list.getId()));
+                    nameToId.put(sheetName, list.getId());
+                }
+                for (int s = 0; s < wb.getNumberOfSheets(); s++) {
+                    org.apache.poi.ss.usermodel.Sheet sheet = wb.getSheetAt(s);
+                    String sheetName = sheet.getSheetName();
+                    Long listId = nameToId.get(sheetName);
+                    if (listId == null) continue;
+                    int last = sheet.getLastRowNum();
+                    for (int r = 1; r <= last; r++) {
+                        org.apache.poi.ss.usermodel.Row row = sheet.getRow(r);
+                        if (row == null) continue;
+                        // колонка 0: Status
+                        org.apache.poi.ss.usermodel.Cell statusCell = row.getCell(0);
+                        if (statusCell == null) continue;
+                        String statusRaw;
+                        switch (statusCell.getCellType()) {
+                            case STRING -> statusRaw = statusCell.getStringCellValue();
+                            case BOOLEAN -> statusRaw = statusCell.getBooleanCellValue() ? "On site" : "Evacuated";
+                            case NUMERIC -> statusRaw = String.valueOf(statusCell.getNumericCellValue());
+                            default -> statusRaw = statusCell.toString();
+                        }
+                        boolean status = !"Evacuated".equalsIgnoreCase(statusRaw != null ? statusRaw.trim() : "");
+                        // колонка 2: ID
+                        org.apache.poi.ss.usermodel.Cell idCell = row.getCell(2);
+                        if (idCell == null) continue;
+                        Long listItemId = null;
+                        switch (idCell.getCellType()) {
+                            case NUMERIC -> listItemId = (long) idCell.getNumericCellValue();
+                            case STRING -> {
+                                String val = idCell.getStringCellValue();
+                                if (val != null && !val.isBlank()) {
+                                    try {
+                                        listItemId = Long.parseLong(val.trim());
+                                    } catch (NumberFormatException ignored) {}
+                                }
+                            }
+                            default -> {
+                                String val = idCell.toString();
+                                if (val != null && !val.isBlank()) {
+                                    try {
+                                        listItemId = Long.parseLong(val.trim());
+                                    } catch (NumberFormatException ignored) {}
+                                }
+                            }
+                        }
+                        if (listItemId != null) {
+                            evacuationStatusService.updateStatus(listId, listItemId, status);
+                            updatesCount++;
+                        }
+                    }
+                }
+            } finally {
+                if (tmp != null && tmp.exists()) tmp.delete();
+            }
+            // подтверждение
+            String confirmation = String.format("Updated %d evacuation status records.", updatesCount);
+            execute(new SendMessage(chatId.toString(), confirmation));
+        } catch (Exception ex) {
+            log.error("Failed to process uploaded evacuation report: {}", ex.getMessage(), ex);
+            try {
+                execute(new SendMessage(chatId.toString(), "Failed to process evacuation report: " + ex.getMessage()));
+            } catch (TelegramApiException e) {
+                log.error("Failed to send error message to user: {}", e.getMessage(), e);
+            }
+        }
+    }
+
+    // Удаляет недопустимые символы и обрезает имя до 31 символа
+    private static String sanitizeSheetName(String raw) {
+        String cleaned = raw == null ? "" : raw.replaceAll("[:\\\\/*?\\[\\]]", "_");
+        return cleaned.length() <= 31 ? cleaned : cleaned.substring(0, 31);
+    }
+
     private LocalDate parseMmDdYyyy(String raw) {
         if (raw == null) return null;
-        String s = raw.trim();
         try {
-            return LocalDate.parse(s, MM_DD_YYYY);
+            return LocalDate.parse(raw.trim(), MM_DD_YYYY);
         } catch (Exception ignored) {
             return null;
         }
     }
 
-    /* ========================= Bot identity ========================= */
+    @Override
+    public String getBotUsername() { return botUsername; }
 
     @Override
-    public String getBotUsername() {
-        return botUsername;
-    }
-
-    @Override
-    public String getBotToken() {
-        return botToken;
-    }
+    public String getBotToken() { return botToken; }
 }

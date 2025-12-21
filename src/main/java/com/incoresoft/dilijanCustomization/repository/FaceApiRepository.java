@@ -327,6 +327,18 @@ public class FaceApiRepository {
         return response.getBody().getId();
     }
 
+    // Получить конфиг списка (входные/выходные камеры)
+    public ListConfigDto getListConfig(Long listId) {
+        String url = "/face/lists/" + listId;
+        ResponseEntity<ListConfigDto> resp = vezhaApi.exchange(
+                vezhaApiProps.getBaseUrl() + url,
+                HttpMethod.GET,
+                null,
+                ListConfigDto.class);
+        return resp.getBody();
+    }
+
+
     private static DetectionsResponse emptyDetections() {
         DetectionsResponse r = new DetectionsResponse();
         r.setData(Collections.emptyList());

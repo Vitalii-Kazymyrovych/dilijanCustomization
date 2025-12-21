@@ -1,4 +1,4 @@
-package com.incoresoft.dilijanCustomization.domain.unknown.dto;
+package com.incoresoft.dilijanCustomization.domain.shared.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
