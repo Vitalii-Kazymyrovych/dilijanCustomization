@@ -1,8 +1,8 @@
 # ====== VEZHA API ======
 vezha:
   api:
-    base-url: "http://localhost:2001/api"
-    token: "YOUR TOKEN"
+    base-url: ""
+    token: ""
 
   # ====== Cafeteria ======
   cafe:
@@ -20,5 +20,24 @@ vezha:
 # ====== Telegram ======
 telegram:
   bot:
-    token: "YOUR TELEGRAM BOT TOKEN"
-    username: "YOUR TELEGRAM BOT USERNAME"
+    token: ""
+    username: ""
+
+# ====== Evacuation ======
+evacuation:
+  # сколько дней истории смотреть при поиске последнего входа/выхода; 0 — всё время
+  lookbackDays: 14
+  # период обновления статусов в минутах
+  refreshMinutes: 5
+  # идентификаторы списков, для которых вычислять статусы
+  listIds: [2]
+
+# ====== PostgreSQL ======
+postgres:
+  # путь до psql.exe
+  psqlPath: "C:/ProgramData/Incoresoft/PostgreSQL/bin/psql.exe"
+  # суперпользователь и пароль (для создания БД/таблицы)
+  superuser: "postgres"
+  superpass: "postgres"
+  # название БД, куда будет создана таблица evacuation
+  database: "dilijancustomization"
