@@ -6,6 +6,7 @@ import com.incoresoft.dilijanCustomization.domain.evacuation.dto.EvacuationStatu
 import com.incoresoft.dilijanCustomization.domain.evacuation.dto.EvacuationStatusPK;
 import com.incoresoft.dilijanCustomization.domain.shared.dto.DetectionDto;
 import com.incoresoft.dilijanCustomization.domain.shared.dto.FaceListDto;
+import com.incoresoft.dilijanCustomization.domain.shared.dto.FaceListsResponse;
 import com.incoresoft.dilijanCustomization.domain.shared.dto.ListItemDto;
 import com.incoresoft.dilijanCustomization.repository.EvacuationStatusRepository;
 import com.incoresoft.dilijanCustomization.repository.FaceApiRepository;
@@ -17,19 +18,17 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.io.BufferedWriter;
-import java.io.IOException;
-import java.io.OutputStream;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
 import java.time.Duration;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
-
-import static org.apache.commons.lang3.StringEscapeUtils.escapeCsv;
 
 /**
  * Вычисляет и сохраняет статусы эвакуации в таблицу PostgreSQL.
@@ -39,6 +38,10 @@ import static org.apache.commons.lang3.StringEscapeUtils.escapeCsv;
 @RequiredArgsConstructor
 @Slf4j
 public class EvacuationStatusService {
+    private static final int DEFAULT_FACE_LIST_LIMIT = 100;
+    private static final int DEFAULT_DETECTION_PAGE_LIMIT = 500;
+    private static final int LIST_ITEM_PAGE_LIMIT = 1000;
+
     private final FaceApiRepository repo;
     private final EvacuationProps evacuationProps;
     private final PostgresProps postgresProps;
@@ -64,21 +67,13 @@ public class EvacuationStatusService {
     /** Периодически обновляет статусы. Период задаётся в конфигурации. */
     @Scheduled(fixedDelayString = "${evacuation.refreshMinutes:5}", timeUnit = TimeUnit.MINUTES)
     public synchronized void refreshStatuses() {
-        List<FaceListDto> evacuationLists;
-        try {
-            evacuationLists = repo.getFaceLists(100).getData()
-                    .stream()
-                    .filter(l -> l.getTimeAttendance().getEnabled())
-                    .toList();
-        } catch (Exception e) {
-            log.warn("[EVAC] VEZHA API unavailable, skipping refresh: {}", e.getMessage());
+        List<FaceListDto> evacuationLists = fetchListsWithAttendanceEnabled();
+        if (evacuationLists.isEmpty()) {
+            log.info("[EVAC] No lists with attendance enabled; skipping refresh");
             return;
         }
-        if (evacuationLists.isEmpty()) return;
         long now = System.currentTimeMillis();
-        Long start = evacuationProps.getLookbackDays() > 0
-                ? now - Duration.ofDays(evacuationProps.getLookbackDays()).toMillis()
-                : null;
+        Long start = resolveStartMillis(now);
         log.info("[EVAC] Refresh started");
         for (FaceListDto list : evacuationLists) {
             try {
@@ -109,51 +104,28 @@ public class EvacuationStatusService {
     // --- внутренние методы ---
 
     private void updateListStatuses(FaceListDto faceList, Long startMillis, Long endMillis) throws Exception {
-        // получаем конфиг списка: входные и выходные камеры
-        List<Long> entrance = faceList.getTimeAttendance().getEntranceAnalyticsIds();
-        List<Long> exit = faceList.getTimeAttendance().getExitAnalyticsIds();
-        List<Long> allStreams = new ArrayList<>();
-        if (entrance != null) allStreams.addAll(entrance);
-        if (exit != null) allStreams.addAll(exit);
-
-        // Загружаем все детекции за период
-        List<DetectionDto> dets = repo.getAllDetectionsInWindow(faceList.getId(), allStreams, startMillis, endMillis, 500);
-
-        // Последняя детекция для каждого list_item_id
-        Map<Long, DetectionDto> latest = new HashMap<>();
-        for (DetectionDto d : dets) {
-            if (d.getListItem() == null || d.getListItem().getId() == null) continue;
-            Long liId = d.getListItem().getId();
-            DetectionDto prev = latest.get(liId);
-            if (prev == null || (prev.getTimestamp() != null && d.getTimestamp() != null && d.getTimestamp() > prev.getTimestamp())) {
-                latest.put(liId, d);
-            }
+        TimeAttendanceConfig attendanceConfig = TimeAttendanceConfig.from(faceList);
+        if (!attendanceConfig.enabled()) {
+            log.debug("[EVAC] Skip list {}: attendance disabled or missing", faceList.getId());
+            return;
         }
 
-        // Загружаем все элементы списка
-        List<ListItemDto> items = repo.getListItems(faceList.getId(), "", "", 0, 1000, "asc", "name").getData();
-        if (items == null || items.isEmpty()) return;
+        List<DetectionDto> detections = repo.getAllDetectionsInWindow(
+                faceList.getId(),
+                attendanceConfig.allStreams(),
+                startMillis,
+                endMillis,
+                DEFAULT_DETECTION_PAGE_LIMIT
+        );
 
-        // Составляем сущности для сохранения/обновления
-        List<EvacuationStatus> toSave = new ArrayList<>();
-        for (ListItemDto item : items) {
-            boolean status = false;
-            DetectionDto det = latest.get(item.getId());
-            if (det != null && det.getAnalytics() != null && det.getAnalytics().getStreamId() != null && entrance != null) {
-                Long sid = det.getAnalytics().getStreamId();
-                status = entrance.contains(sid);
-            }
-            EvacuationStatus es = new EvacuationStatus();
-            es.setListId(faceList.getId());
-            es.setListItemId(item.getId());
-            es.setEnterStreamIds(entrance != null ? entrance.toArray(Long[]::new) : null);
-            es.setExitStreamIds(exit != null ? exit.toArray(Long[]::new) : null);
-            es.setStatus(status);
-            toSave.add(es);
+        Map<Long, DetectionDto> latestByPerson = findLatestDetections(detections);
+        List<ListItemDto> listItems = fetchListItems(faceList.getId());
+        if (listItems.isEmpty()) {
+            return;
         }
 
-        // Сохраняем всё батчем — JPA выполнит upsert по составному ключу.
-        evacuationStatusRepository.saveAll(toSave);
+        List<EvacuationStatus> statuses = buildStatuses(faceList, attendanceConfig, latestByPerson, listItems);
+        evacuationStatusRepository.saveAll(statuses);
     }
 
     /** Обновление статуса одного пользователя в списке. */
@@ -173,13 +145,6 @@ public class EvacuationStatusService {
             log.error("Failed to update status for listId {} and listItemId {}: {}",
                     listId, listItemId, ex.getMessage(), ex);
         }
-    }
-
-    // --- старые вспомогательные psql-методы остаются неизменными (не используются JPA) ---
-    private String toPgArrayLiteral(List<Long> list) {
-        if (list == null || list.isEmpty()) return "'{}'::int[]";
-        String joined = list.stream().map(String::valueOf).collect(Collectors.joining(","));
-        return "'{" + joined + "}'::int[]";
     }
 
     private void initializeDatabaseAndTable() throws Exception {
@@ -237,25 +202,109 @@ public class EvacuationStatusService {
         p.waitFor();
     }
 
-    private String queryPsql(String db, String sql) throws Exception {
-        List<String> cmd = new ArrayList<>();
-        cmd.add(postgresProps.getPsqlPath());
-        cmd.add("-U");
-        cmd.add(postgresProps.getSuperuser());
-        if (db != null && !db.isBlank()) {
-            cmd.add("-d");
-            cmd.add(db);
+    private List<FaceListDto> fetchListsWithAttendanceEnabled() {
+        try {
+            FaceListsResponse response = repo.getFaceLists(DEFAULT_FACE_LIST_LIMIT);
+            if (response == null || response.getData() == null) {
+                return List.of();
+            }
+            return response.getData().stream()
+                    .filter(list -> list.getTimeAttendance() != null)
+                    .filter(list -> Boolean.TRUE.equals(list.getTimeAttendance().getEnabled()))
+                    .toList();
+        } catch (Exception e) {
+            log.warn("[EVAC] VEZHA API unavailable, skipping refresh: {}", e.getMessage());
+            return List.of();
         }
-        cmd.add("-t");
-        cmd.add("-A");
-        cmd.add("-c");
-        cmd.add(sql);
-        ProcessBuilder pb = new ProcessBuilder(cmd);
-        pb.environment().put("PGPASSWORD", postgresProps.getSuperpass());
-        Process p = pb.start();
-        byte[] outBytes = p.getInputStream().readAllBytes();
-        p.getErrorStream().transferTo(OutputStream.nullOutputStream());
-        p.waitFor();
-        return new String(outBytes, StandardCharsets.UTF_8).trim();
+    }
+
+    private Long resolveStartMillis(long now) {
+        return evacuationProps.getLookbackDays() > 0
+                ? now - Duration.ofDays(evacuationProps.getLookbackDays()).toMillis()
+                : null;
+    }
+
+    private List<ListItemDto> fetchListItems(Long listId) {
+        var response = repo.getListItems(listId, "", "", 0, LIST_ITEM_PAGE_LIMIT, "asc", "name");
+        return response != null && response.getData() != null ? response.getData() : List.of();
+    }
+
+    private Map<Long, DetectionDto> findLatestDetections(List<DetectionDto> detections) {
+        if (detections == null || detections.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, DetectionDto> latest = new HashMap<>();
+        for (DetectionDto detection : detections) {
+            if (detection == null || detection.getListItem() == null || detection.getListItem().getId() == null) {
+                continue;
+            }
+            Long listItemId = detection.getListItem().getId();
+            DetectionDto previous = latest.get(listItemId);
+            if (previous == null || isLater(detection, previous)) {
+                latest.put(listItemId, detection);
+            }
+        }
+        return latest;
+    }
+
+    private boolean isLater(DetectionDto candidate, DetectionDto existing) {
+        return candidate.getTimestamp() != null
+                && (existing.getTimestamp() == null || candidate.getTimestamp() > existing.getTimestamp());
+    }
+
+    private List<EvacuationStatus> buildStatuses(FaceListDto faceList,
+                                                 TimeAttendanceConfig attendanceConfig,
+                                                 Map<Long, DetectionDto> latestByPerson,
+                                                 List<ListItemDto> listItems) {
+        List<EvacuationStatus> statuses = new ArrayList<>();
+        for (ListItemDto item : listItems) {
+            DetectionDto detection = latestByPerson.get(item.getId());
+            boolean status = detection != null && isEntranceDetection(detection, attendanceConfig.entrance());
+
+            EvacuationStatus evacuationStatus = new EvacuationStatus();
+            evacuationStatus.setListId(faceList.getId());
+            evacuationStatus.setListItemId(item.getId());
+            evacuationStatus.setEnterStreamIds(attendanceConfig.entranceArray());
+            evacuationStatus.setExitStreamIds(attendanceConfig.exitArray());
+            evacuationStatus.setStatus(status);
+            statuses.add(evacuationStatus);
+        }
+        return statuses;
+    }
+
+    private boolean isEntranceDetection(DetectionDto detection, List<Long> entranceStreams) {
+        if (entranceStreams.isEmpty() || detection.getAnalytics() == null || detection.getAnalytics().getStreamId() == null) {
+            return false;
+        }
+        return entranceStreams.contains(detection.getAnalytics().getStreamId());
+    }
+
+    private record TimeAttendanceConfig(boolean enabled, List<Long> entrance, List<Long> exit) {
+        static TimeAttendanceConfig from(FaceListDto faceList) {
+            if (faceList.getTimeAttendance() == null || !Boolean.TRUE.equals(faceList.getTimeAttendance().getEnabled())) {
+                return new TimeAttendanceConfig(false, List.of(), List.of());
+            }
+            List<Long> entrance = defaultList(faceList.getTimeAttendance().getEntranceAnalyticsIds());
+            List<Long> exit = defaultList(faceList.getTimeAttendance().getExitAnalyticsIds());
+            return new TimeAttendanceConfig(true, entrance, exit);
+        }
+
+        Long[] entranceArray() {
+            return entrance.isEmpty() ? null : entrance.toArray(Long[]::new);
+        }
+
+        Long[] exitArray() {
+            return exit.isEmpty() ? null : exit.toArray(Long[]::new);
+        }
+
+        List<Long> allStreams() {
+            List<Long> combined = new ArrayList<>(entrance);
+            combined.addAll(exit);
+            return combined;
+        }
+
+        private static List<Long> defaultList(List<Long> source) {
+            return source == null ? List.of() : source;
+        }
     }
 }
