@@ -12,10 +12,22 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import java.io.File;
-import java.time.*;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
 
 /**
  * Gathers data for the evacuation report and delegates XLSX creation to ReportService.
@@ -32,11 +44,20 @@ import java.util.*;
 @ConditionalOnProperty(prefix = "evacuation", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class EvacuationReportService {
 
+    private static final int FACE_LIST_FETCH_LIMIT = 100;
+    private static final int LIST_ITEMS_FETCH_LIMIT = 1000;
+
     private final FaceApiRepository repo;
     private final ReportService reportService;
     private final EvacuationStatusService evacuationStatusService;
 
     public File buildEvacuationReport(List<Long> listIds) throws Exception {
+        Map<FaceListDto, List<ListItemDto>> reportData = collectReportData(listIds);
+        File out = File.createTempFile("evacuation-", ".xlsx");
+        return reportService.exportEvacuationWorkbook(reportData, out);
+    }
+
+    private Map<FaceListDto, List<ListItemDto>> collectReportData(List<Long> listIds) {
         evacuationStatusService.refreshStatuses();
         List<Long> sortedIds = new ArrayList<>(listIds);
         Collections.sort(sortedIds);
@@ -46,28 +67,33 @@ public class EvacuationReportService {
             if (listMeta == null) continue;
             // Получаем ID list_item_id со статусом true из БД через JPA-сервис
             Set<Long> activeIds = evacuationStatusService.getActiveListItemIds(listId);
-            List<ListItemDto> all = fetchAllListItems(listId);
-            List<ListItemDto> present = all.stream()
-                    .filter(it -> it.getId() != null && activeIds.contains(it.getId()))
-                    .sorted(Comparator.comparing(li -> Optional.ofNullable(li.getName()).orElse("").toLowerCase(Locale.ROOT)))
-                    .toList();
+            List<ListItemDto> present = filterPresentItems(activeIds, fetchAllListItems(listId));
             data.put(listMeta, present);
         }
-        File out = File.createTempFile("evacuation-", ".xlsx");
-        return reportService.exportEvacuationWorkbook(data, out);
+        return data;
     }
 
     private Optional<FaceListDto> fetchFaceListMeta(Long listId) {
-        return repo.getFaceLists(100)
-                .getData()
+        var response = repo.getFaceLists(FACE_LIST_FETCH_LIMIT);
+        if (response == null || response.getData() == null) {
+            return Optional.empty();
+        }
+        return response.getData()
                 .stream()
                 .filter(d -> Objects.equals(d.getId(), listId))
                 .findFirst();
     }
 
     private List<ListItemDto> fetchAllListItems(Long listId) {
-        ListItemsResponse resp = repo.getListItems(listId, "", "", 0, 1000, "asc", "name");
+        ListItemsResponse resp = repo.getListItems(listId, "", "", 0, LIST_ITEMS_FETCH_LIMIT, "asc", "name");
         return (resp != null && resp.getData() != null) ? resp.getData() : List.of();
+    }
+
+    private List<ListItemDto> filterPresentItems(Set<Long> activeIds, List<ListItemDto> items) {
+        return items.stream()
+                .filter(it -> it.getId() != null && activeIds.contains(it.getId()))
+                .sorted(Comparator.comparing(li -> Optional.ofNullable(li.getName()).orElse("").toLowerCase(Locale.ROOT)))
+                .toList();
     }
 
     /**

@@ -70,3 +70,4 @@ Configuration is loaded from `config/config.yaml` (not committed) with defaults 
 - Pagination in `FaceApiRepository#getAllDetectionsInWindow` now also respects the response `total/pages` metadata so loops terminate even when each page is full.
 - Tests rely on mocks for VEZHA/Telegram/PostgreSQL; they do not make network calls at runtime.
 - Mockito dependencies are provided by `spring-boot-starter-test`; no additional mockito artifacts are required.
+- Core services extract helper methods/constants for readability and now guard more defensively against missing VEZHA responses or empty time-attendance settings when computing statuses and reports.
