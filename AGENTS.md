@@ -1,5 +1,10 @@
 # Codex instructions for this repo
 
+## Agent logs and readme
+- Before performing any task first update memory from AGENT-LOG.md file to understand what had been done earlier.
+- After performing any task briefly log changes made to the code in AGENT-LOG.md
+- After making any changes to the code update README.md
+
 ## How to run tests
 - Unit tests (default): `./mvnw -B test`
 
