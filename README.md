@@ -8,7 +8,7 @@ This Spring Boot service glues the VEZHA face-recognition API, Telegram, and Exc
   - `CafeteriaReportController` and `EvacuationReportController` expose report generation endpoints (per-day attendance pivot and multi-list evacuation workbooks respectively).
 - **Telegram bot**: `TelegramBot` orchestrates chat flows for evacuation and attendance reports, forwards uploaded evacuation workbooks to `EvacuationStatusService`, and uses `AttendanceReportService` / `EvacuationReportService` to generate XLSX files on demand.
 - **VEZHA integration**: `FaceApiRepository` wraps all VEZHA calls (detections, list CRUD, storage downloads). Higher-level services rely on it for analytics queries, unknown person management, and pulling list metadata/images.
-  - Detection queries send a multipart request that always contains an empty `image` part (matching the VEZHA Swagger contract) even when filtering without an uploaded file.
+  - Detection queries send a multipart request that always contains an empty `image` part with a non-blank filename (matching the VEZHA Swagger contract) even when filtering without an uploaded file.
 - **Unknown-person pipeline**: `UnknownListInitializer` ensures a dedicated face list exists at startup and records its id in `UnknownListRegistry`. `UnknownPersonService` then:
   - searches recent detections around a webhook event and creates a list item when the face isn’t in any list;
   - deletes items when VEZHA signals removal;
@@ -48,7 +48,7 @@ This Spring Boot service glues the VEZHA face-recognition API, Telegram, and Exc
 
 ## Configuration
 Configuration is loaded from `config/config.yaml` (not committed) with defaults in `config/config.yaml.example`:
-- `vezha.api.*`: base URL and token for VEZHA REST calls.
+- `vezha.api.*`: base URL and token for VEZHA REST calls. You can also set `min-detection-similarity` (defaults to `0`) to satisfy VEZHA’s detections endpoint when it requires the parameter.
 - `telegram.bot.*`: credentials for the polling bot.
 - `evacuation.*`: toggle/intervals for status refresh and report eligibility.
 - `vezha.cafe.*`: analytics ids, timezone, cron, excluded lists, and output directory for cafeteria XLSX.

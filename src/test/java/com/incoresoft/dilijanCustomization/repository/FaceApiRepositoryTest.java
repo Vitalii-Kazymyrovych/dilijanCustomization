@@ -93,7 +93,7 @@ class FaceApiRepositoryTest {
 
         server.expect(requestTo("http://example/api/face/detections?limit=1&sort_order=asc&offset=0"))
                 .andExpect(method(HttpMethod.POST))
-                .andExpect(content().string(containsString("name=\"image\"")))
+                .andExpect(content().string(containsString("name=\"image\"; filename=\"image.png\"")))
                 .andRespond(withSuccess("{\"data\":[{\"id\":1,\"timestamp\":5}],\"total\":1,\"pages\":1,\"status\":\"ok\"}", MediaType.APPLICATION_JSON));
 
         List<DetectionDto> all = repo.getAllDetectionsInWindow(null, null, null, null, 1);

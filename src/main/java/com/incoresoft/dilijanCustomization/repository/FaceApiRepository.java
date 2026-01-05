@@ -40,6 +40,7 @@ import java.util.function.UnaryOperator;
 @Repository
 @RequiredArgsConstructor
 public class FaceApiRepository {
+    private static final int MIN_DETECTION_SIMILARITY = 0;
     private final RestTemplate vezhaApi;
     private final VezhaApiProps vezhaApiProps;
     private final RestTemplateBuilder restTemplateBuilder;
@@ -49,6 +50,7 @@ public class FaceApiRepository {
         String url = buildApiUrl("/face/detections", b -> b
                 .queryParam("limit", (limit == null ? 100 : limit))
                 .queryParam("sort_order", (sortOrder == null ? "asc" : sortOrder))
+                .queryParam("min_detection_similarity", MIN_DETECTION_SIMILARITY)
                 .queryParamIfPresent("start_date", java.util.Optional.ofNullable(startTs))
                 .queryParamIfPresent("end_date", java.util.Optional.ofNullable(endTs)));
 
@@ -154,7 +156,8 @@ public class FaceApiRepository {
     ) {
         UriComponentsBuilder b = baseApi("/face/detections")
                 .queryParam("limit", limit == null ? 500 : limit)
-                .queryParam("sort_order", sortOrder == null ? "asc" : sortOrder);
+                .queryParam("sort_order", sortOrder == null ? "asc" : sortOrder)
+                .queryParam("min_detection_similarity", MIN_DETECTION_SIMILARITY);
 
         if (offset != null)      b.queryParam("offset", offset);
         if (startMillis != null) b.queryParam("start_date", startMillis);
@@ -371,7 +374,7 @@ public class FaceApiRepository {
         emptyBody.add("image", new ByteArrayResource(new byte[0]) {
             @Override
             public String getFilename() {
-                return "";
+                return "image.png"; // VEZHA requires a non-blank filename for the image part
             }
         });
         HttpHeaders headers = new HttpHeaders();
