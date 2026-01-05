@@ -1,0 +1,2 @@
+- Removed mockito-inline dependency to rely on starter-managed Mockito versions and avoid resolution issues.
+- Noted Mockito dependency guidance in README testing notes.
