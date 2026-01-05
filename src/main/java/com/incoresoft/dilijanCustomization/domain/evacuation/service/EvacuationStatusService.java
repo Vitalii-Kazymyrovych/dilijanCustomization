@@ -8,6 +8,7 @@ import com.incoresoft.dilijanCustomization.domain.shared.dto.DetectionDto;
 import com.incoresoft.dilijanCustomization.domain.shared.dto.FaceListDto;
 import com.incoresoft.dilijanCustomization.domain.shared.dto.FaceListsResponse;
 import com.incoresoft.dilijanCustomization.domain.shared.dto.ListItemDto;
+import com.incoresoft.dilijanCustomization.domain.shared.dto.ListItemsResponse;
 import com.incoresoft.dilijanCustomization.repository.EvacuationStatusRepository;
 import com.incoresoft.dilijanCustomization.repository.FaceApiRepository;
 import jakarta.annotation.PostConstruct;
@@ -253,8 +254,21 @@ public class EvacuationStatusService {
     }
 
     private List<ListItemDto> fetchListItems(Long listId) {
-        var response = repo.getListItems(listId, "", "", 0, LIST_ITEM_PAGE_LIMIT, "asc", "name");
-        return response != null && response.getData() != null ? response.getData() : List.of();
+        List<ListItemDto> allItems = new ArrayList<>();
+        int offset = 0;
+        while (true) {
+            ListItemsResponse response = repo.getListItems(listId, "", "", offset, LIST_ITEM_PAGE_LIMIT, "asc", "name");
+            if (response == null || response.getData() == null || response.getData().isEmpty()) {
+                break;
+            }
+            allItems.addAll(response.getData());
+            offset += LIST_ITEM_PAGE_LIMIT;
+            Integer total = response.getTotal();
+            if (response.getData().size() < LIST_ITEM_PAGE_LIMIT || (total != null && allItems.size() >= total)) {
+                break;
+            }
+        }
+        return allItems;
     }
 
     private Map<Long, DetectionDto> findLatestDetections(List<DetectionDto> detections) {
