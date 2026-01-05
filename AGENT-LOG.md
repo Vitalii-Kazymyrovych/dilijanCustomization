@@ -7,3 +7,4 @@
 - Refactored attendance, evacuation, and unknown person services for clearer helpers/constants, safer VEZHA/list handling, and tidier imports; updated README and ran the full Maven test suite.
 - Added entrance timestamp support to evacuation statuses and reports (DB schema add, service updates, Excel column), plus refreshed tests/README.
 - Ensured evacuation status refresh paginates through all list items (fixing >1000 person lists) and added a unit test to cover pagination.
+- Normalized VEZHA API URL construction in `FaceApiRepository` to handle trailing base-url slashes, added a regression test for detections, and documented the fix.
