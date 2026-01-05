@@ -17,6 +17,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.doReturn;
@@ -95,7 +96,7 @@ class FaceApiRepositoryTest {
 
         server.expect(requestTo("http://example/api/face/detections?limit=1&sort_order=asc&min_detection_similarity=0&offset=0"))
                 .andExpect(method(HttpMethod.POST))
-                .andExpect(content().string(containsString("name=\"image\"; filename=\"placeholder.png\"")))
+                .andExpect(content().string(not(containsString("name=\"image\""))))
                 .andRespond(withSuccess("{\"data\":[{\"id\":1,\"timestamp\":5}],\"total\":1,\"pages\":1,\"status\":\"ok\"}", MediaType.APPLICATION_JSON));
 
         List<DetectionDto> all = repo.getAllDetectionsInWindow(null, null, null, null, 1);
@@ -117,7 +118,7 @@ class FaceApiRepositoryTest {
 
         server.expect(requestTo("http://example/api/face/detections?limit=500&sort_order=asc&min_detection_similarity=0&start_date=1&end_date=2&list_id=3"))
                 .andExpect(method(HttpMethod.POST))
-                .andExpect(content().string(containsString("placeholder.png")))
+                .andExpect(content().string(not(containsString("name=\"image\""))))
                 .andRespond(withServerError()
                         .body("[{\"type\":\"ERROR_FAILED_TO_PROCESS_REQUEST\",\"args\":[\"image processing failed\"]}]")
                         .contentType(MediaType.APPLICATION_JSON));

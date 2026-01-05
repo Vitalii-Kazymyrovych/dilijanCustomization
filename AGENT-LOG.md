@@ -12,4 +12,4 @@
 - Set a non-blank filename on the empty multipart `image` field for detection requests to satisfy VEZHA validation and tightened the regression test and README note accordingly.
 - Added `min_detection_similarity` support to detections calls (defaulting to 0), wired the property into `VezhaApiProps`, updated the config example/README, and extended the detection URL test; ran `./mvnw -B -Dtest=FaceApiRepositoryTest test`.
 - Improved VEZHA detection error handling to surface HTTP status/response text in exceptions, added a regression test for the failure path, and documented the logging behavior.
-- Send a 1x1 PNG placeholder (with filename/content-type) in detection requests to prevent VEZHA from returning “image processing failed” when filtering without an uploaded photo; adjusted tests/README accordingly.
+- Send an empty multipart body (no image part) for detection filters to mirror the browser request and avoid VEZHA “image processing failed” responses; adjusted tests/README accordingly.
