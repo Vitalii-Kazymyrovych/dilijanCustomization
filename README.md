@@ -62,5 +62,9 @@ Configuration is loaded from `config/config.yaml` (not committed) with defaults 
 
 ## Local development
 - **Run**: `./mvnw spring-boot:run`
-- **Tests**: `./mvnw -B test` (scheduling and network calls are disabled by the example config).
+- **Tests**: `./mvnw -B test` (scheduling and network calls are disabled by the example config). Make sure Maven Central is reachable for dependency resolution.
 - Avoid hitting live VEZHA/Telegram services during tests; override config with safe endpoints/tokens when needed.
+
+## Testing notes
+- Unit tests now cover the report builders (`ReportService`, `AttendanceReportService`, `EvacuationReportService`), initialization helpers (`UnknownListInitializer`, `UnknownListRegistry`), VEZHA client pagination (`FaceApiRepository`), and evacuation status persistence logic (`EvacuationStatusService`).
+- Tests rely on mocks for VEZHA/Telegram/PostgreSQL; they do not make network calls at runtime.

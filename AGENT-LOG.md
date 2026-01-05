@@ -1,0 +1,3 @@
+- Added comprehensive unit tests for reporting, evacuation, unknown list initialization, and VEZHA client pagination to improve coverage.
+- Declared missing dependencies (commons-lang3, mockito-inline) required by the codebase and tests.
+- Documented the expanded test suite and execution notes in README.
