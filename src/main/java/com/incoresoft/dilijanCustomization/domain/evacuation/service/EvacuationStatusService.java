@@ -316,10 +316,10 @@ public class EvacuationStatusService {
     }
 
     private boolean isEntranceDetection(DetectionDto detection, List<Long> entranceStreams) {
-        if (entranceStreams.isEmpty() || detection.getAnalytics() == null || detection.getAnalytics().getStreamId() == null) {
+        if (entranceStreams.isEmpty() || detection.getAnalytics() == null || detection.getAnalytics().getId() == null) {
             return false;
         }
-        return entranceStreams.contains(detection.getAnalytics().getStreamId());
+        return entranceStreams.contains(detection.getAnalytics().getId());
     }
 
     private record TimeAttendanceConfig(boolean enabled, List<Long> entrance, List<Long> exit) {

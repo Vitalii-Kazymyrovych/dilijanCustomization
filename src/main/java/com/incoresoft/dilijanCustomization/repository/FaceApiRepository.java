@@ -154,25 +154,23 @@ public class FaceApiRepository {
             Integer offset,
             String sortOrder
     ) {
-        UriComponentsBuilder b = baseApi("/face/detections")
-                .queryParam("limit", limit == null ? 500 : limit)
-                .queryParam("sort_order", sortOrder == null ? "asc" : sortOrder)
-                .queryParam("min_detection_similarity", MIN_DETECTION_SIMILARITY);
-
-        if (offset != null)      b.queryParam("offset", offset);
+        UriComponentsBuilder b = baseApi("/face/detections");
         if (startMillis != null) b.queryParam("start_date", startMillis);
         if (endMillis != null)   b.queryParam("end_date",   endMillis);
-        if (listId != null)      b.queryParam("list_id",    listId);
-
         if (analyticsIds != null && !analyticsIds.isEmpty()) {
             String encoded = "[" + analyticsIds.stream().map(String::valueOf).collect(java.util.stream.Collectors.joining(",")) + "]";
             b.queryParam("analytics_ids", encoded);
         }
-
+        if (listId != null)      b.queryParam("list_id",    listId);
+        b.queryParam("min_age", 0);
+        b.queryParam("max_age", 100);
+        b.queryParam("min_list_item_similarity", 0);
+        b.queryParam("max_list_item_similarity", 100);
+        if (offset != null)      b.queryParam("offset", offset);
+        b.queryParam("limit", limit == null ? 500 : limit);
+        b.queryParam("sort_order", sortOrder == null ? "asc" : sortOrder);
         String url = b.build().toUriString();
-
         HttpEntity<MultiValueMap<String, Object>> req = getRequestWithEmptyMultipart();
-
         try {
             ResponseEntity<DetectionsResponse> resp =
                     vezhaApi.exchange(

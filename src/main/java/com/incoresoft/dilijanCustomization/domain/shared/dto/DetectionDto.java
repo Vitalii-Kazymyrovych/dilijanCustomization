@@ -17,7 +17,10 @@ public class DetectionDto {
     private String faceImage;
     @Data
   public static class AnalyticsRef {
-    @JsonProperty("stream_id") private Long streamId;
+      @JsonProperty("id")
+      private Long id;
+      @JsonProperty("stream_id")
+      private Long streamId;
   }
 }
 
