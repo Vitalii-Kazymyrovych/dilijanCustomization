@@ -12,6 +12,7 @@ import com.incoresoft.dilijanCustomization.repository.FaceApiRepository;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,6 +34,7 @@ import static org.apache.commons.lang3.StringEscapeUtils.escapeCsv;
 /**
  * Вычисляет и сохраняет статусы эвакуации в таблицу PostgreSQL.
  */
+@ConditionalOnProperty(prefix = "evacuation", name = "enabled", havingValue = "true", matchIfMissing = true)
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -47,6 +49,10 @@ public class EvacuationStatusService {
     public void init() {
         // При использовании Spring Data JPA таблица создаётся автоматически,
         // поэтому просто рассчитываем статусы при старте.
+        if (!evacuationProps.isAutostart()) {
+            log.info("[EVAC] Autostart disabled; skipping init");
+            return;
+        }
         try {
             initializeDatabaseAndTable();
         } catch (Exception e) {
@@ -58,10 +64,16 @@ public class EvacuationStatusService {
     /** Периодически обновляет статусы. Период задаётся в конфигурации. */
     @Scheduled(fixedDelayString = "${evacuation.refreshMinutes:5}", timeUnit = TimeUnit.MINUTES)
     public synchronized void refreshStatuses() {
-        List<FaceListDto> evacuationLists = repo.getFaceLists(100).getData()
-                .stream()
-                .filter(l -> l.getTimeAttendance().getEnabled())
-                .toList();
+        List<FaceListDto> evacuationLists;
+        try {
+            evacuationLists = repo.getFaceLists(100).getData()
+                    .stream()
+                    .filter(l -> l.getTimeAttendance().getEnabled())
+                    .toList();
+        } catch (Exception e) {
+            log.warn("[EVAC] VEZHA API unavailable, skipping refresh: {}", e.getMessage());
+            return;
+        }
         if (evacuationLists.isEmpty()) return;
         long now = System.currentTimeMillis();
         Long start = evacuationProps.getLookbackDays() > 0

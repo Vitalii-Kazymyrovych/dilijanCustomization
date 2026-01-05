@@ -10,7 +10,7 @@ import org.springframework.web.client.RestTemplate;
 import java.util.List;
 
 @Configuration
-@EnableConfigurationProperties({VezhaApiProps.class, CafeteriaProps.class, EvacuationProps.class, PostgresProps.class})
+@EnableConfigurationProperties({VezhaApiProps.class, CafeteriaProps.class, EvacuationProps.class, PostgresProps.class, UnknownProps.class})
 public class HttpClientConfig {
     @Bean
     public RestTemplate vezhaRestTemplate(VezhaApiProps props, RestTemplateBuilder builder) {

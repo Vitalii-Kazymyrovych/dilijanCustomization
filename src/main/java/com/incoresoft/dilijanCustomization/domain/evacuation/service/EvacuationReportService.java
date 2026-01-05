@@ -7,6 +7,7 @@ import com.incoresoft.dilijanCustomization.domain.shared.service.ReportService;
 import com.incoresoft.dilijanCustomization.repository.FaceApiRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -28,6 +29,7 @@ import java.util.*;
 @Slf4j
 @Service
 @RequiredArgsConstructor
+@ConditionalOnProperty(prefix = "evacuation", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class EvacuationReportService {
 
     private final FaceApiRepository repo;

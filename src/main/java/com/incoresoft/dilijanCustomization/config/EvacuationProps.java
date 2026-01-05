@@ -23,4 +23,6 @@ public class EvacuationProps {
      * Идентификаторы списков, для которых нужно вычислять статусы.
      */
     private List<Long> listIds = new ArrayList<>();
+    private boolean enablesd = true;
+    private boolean autostart = true;
 }

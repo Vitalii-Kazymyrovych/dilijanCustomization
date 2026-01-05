@@ -1,43 +1,50 @@
+spring:
+  task:
+    scheduling:
+      # Unit tests / Codex: don't run @Scheduled jobs
+      enabled: false
+
 # ====== VEZHA API ======
 vezha:
   api:
-    base-url: ""
-    token: ""
+    # Keep unreachable to prevent accidental calls from tests
+    base-url: "http://127.0.0.1:9/api"
+    token: "DUMMY"
 
-  # ====== Cafeteria ======
   cafe:
-    # absolute folder for XLSX output
-    output-dir: "C:/reports/cafeteria"
-    # analytics ID(s) used to count unique people (list)
+    # Linux-safe path
+    output-dir: "/tmp/reports/cafeteria"
     analytics-ids: [2]
-    # local scheduling/meal-time timezone
-    timezone: "Asia/Yerevan"
-    # daily run time (22:00 local time)
+    timezone: "UTC"
     schedule-cron: "0 0 22 * * *"
-    # exclude these lists completely (case-insensitive names) (list)
     excluded-list-names: ["outsourced"]
 
 # ====== Telegram ======
 telegram:
   bot:
-    token: ""
-    username: ""
+    token: "DUMMY"
+    username: "dummy_bot"
 
 # ====== Evacuation ======
 evacuation:
-  # сколько дней истории смотреть при поиске последнего входа/выхода; 0 — всё время
+  # For Codex/unit tests: keep disabled by default
+  enabled: false
+  autostart: false
   lookbackDays: 14
-  # период обновления статусов в минутах
   refreshMinutes: 5
-  # идентификаторы списков, для которых вычислять статусы
   listIds: [2]
+
+# ====== Unknown ======
+unknown:
+  # matches @ConfigurationProperties(prefix="unknown")
+  autostart: false
 
 # ====== PostgreSQL ======
 postgres:
-  # путь до psql.exe
-  psqlPath: "C:/ProgramData/Incoresoft/PostgreSQL/bin/psql.exe"
-  # суперпользователь и пароль (для создания БД/таблицы)
+  # Linux client path (only relevant if you ever enable DB init)
+  psqlPath: "/usr/bin/psql"
   superuser: "postgres"
   superpass: "postgres"
-  # название БД, куда будет создана таблица evacuation
-  database: "dilijancustomization"
+
+  # blank => skip DB init logic in tests
+  database: ""
