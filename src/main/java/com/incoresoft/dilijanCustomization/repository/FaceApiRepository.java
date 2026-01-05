@@ -25,6 +25,7 @@ import org.springframework.stereotype.Repository;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
+import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
@@ -181,9 +182,22 @@ public class FaceApiRepository {
                             req,
                             DetectionsResponse.class);
             return resp.getBody();
+        } catch (HttpStatusCodeException e) {
+            String body = e.getResponseBodyAsString();
+            String message = String.format(
+                    "Failed to fetch detections: HTTP %s%s%s",
+                    e.getStatusCode().value(),
+                    (e.getStatusText() == null || e.getStatusText().isBlank())
+                            ? ""
+                            : " " + e.getStatusText(),
+                    (body == null || body.isBlank()) ? "" : " - " + body
+            );
+            log.error("[GET DETECTIONS] {}", message, e);
+            throw new RuntimeException(message, e);
         } catch (Exception e) {
-            log.error("[GET DETECTIONS]", e);
-            throw new RuntimeException();
+            String message = "Failed to fetch detections: " + e.getMessage();
+            log.error("[GET DETECTIONS] {}", message, e);
+            throw new RuntimeException(message, e);
         }
     }
 

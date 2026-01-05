@@ -76,3 +76,4 @@ Configuration is loaded from `config/config.yaml` (not committed) with defaults 
 - Tests rely on mocks for VEZHA/Telegram/PostgreSQL; they do not make network calls at runtime.
 - Mockito dependencies are provided by `spring-boot-starter-test`; no additional mockito artifacts are required.
 - Core services extract helper methods/constants for readability and now guard more defensively against missing VEZHA responses or empty time-attendance settings when computing statuses and reports.
+- VEZHA detection failures now surface the HTTP status and response body in exceptions so logs capture upstream error details (e.g., image processing errors).

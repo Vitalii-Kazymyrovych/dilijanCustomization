@@ -11,3 +11,4 @@
 - Updated `FaceApiRepository` to include an empty `image` part in multipart detection requests, added a regression check to ensure the body carries the part, and documented the behavior in README.
 - Set a non-blank filename on the empty multipart `image` field for detection requests to satisfy VEZHA validation and tightened the regression test and README note accordingly.
 - Added `min_detection_similarity` support to detections calls (defaulting to 0), wired the property into `VezhaApiProps`, updated the config example/README, and extended the detection URL test; ran `./mvnw -B -Dtest=FaceApiRepositoryTest test`.
+- Improved VEZHA detection error handling to surface HTTP status/response text in exceptions, added a regression test for the failure path, and documented the logging behavior.
