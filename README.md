@@ -14,6 +14,7 @@ This Spring Boot service glues the VEZHA face-recognition API, Telegram, and Exc
   - performs weekly cleanup of the unknown list.
 - **Evacuation domain**: `EvacuationStatusService` periodically pulls detections for time-attendance-enabled lists, determines who last entered vs. exited, and persists statuses via `EvacuationStatusRepository` (PostgreSQL). `EvacuationReportService` refreshes statuses and assembles an XLSX workbook through `ReportService`, which embeds photos and dropdowns.
   - The evacuation status table now also stores the timestamp of the last entrance detection per person (`entrance_time`) so the report can display when each employee entered.
+  - Evacuation status refresh paginates through all list items, so lists with more than 1000 people still update statuses correctly.
 - **Cafeteria attendance**: `AttendanceReportService` defines meal time windows, counts unique list item detections per meal, and passes pivot rows to `ReportService` for XLSX export. A nightly schedule can auto-run the report.
 - **Configuration & infrastructure**:
   - External config lives in `config/config.yaml` (see `config/config.yaml.example`); properties are bound via `*Props` classes and injected into the beans above.
