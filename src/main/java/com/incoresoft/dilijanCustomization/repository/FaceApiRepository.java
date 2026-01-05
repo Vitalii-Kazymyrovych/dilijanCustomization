@@ -22,6 +22,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Repository;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestClientException;
@@ -367,6 +368,12 @@ public class FaceApiRepository {
 
     private static HttpEntity<MultiValueMap<String, Object>> getRequestWithEmptyMultipart() {
         MultiValueMap<String, Object> emptyBody = new LinkedMultiValueMap<>();
+        emptyBody.add("image", new ByteArrayResource(new byte[0]) {
+            @Override
+            public String getFilename() {
+                return "";
+            }
+        });
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.MULTIPART_FORM_DATA);
         headers.setAccept(List.of(MediaType.APPLICATION_JSON));
