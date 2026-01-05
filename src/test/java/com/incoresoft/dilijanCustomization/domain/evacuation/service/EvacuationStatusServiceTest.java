@@ -48,5 +48,6 @@ class EvacuationStatusServiceTest {
         assertThat(saved.getListId()).isEqualTo(1L);
         assertThat(saved.getListItemId()).isEqualTo(2L);
         assertThat(saved.getStatus()).isTrue();
+        assertThat(saved.getEntranceTime()).isNotNull();
     }
 }

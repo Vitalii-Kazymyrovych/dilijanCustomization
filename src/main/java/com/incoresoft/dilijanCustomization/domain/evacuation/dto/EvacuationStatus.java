@@ -38,4 +38,7 @@ public class EvacuationStatus {
     /** Flag indicating whether the person is on site (true) or has evacuated (false). */
     @Column(name = "status")
     private Boolean status;
+    /** Timestamp (epoch millis) of the last entrance detection that marked the user on site. */
+    @Column(name = "entrance_time")
+    private Long entranceTime;
 }

@@ -5,3 +5,4 @@
 - Noted Mockito dependency guidance in README testing notes.
 - Hardened `FaceApiRepository#getAllDetectionsInWindow` to stop using pages/total metadata and adjusted its test to prevent pagination hangs; documented the pagination guard in README.
 - Refactored attendance, evacuation, and unknown person services for clearer helpers/constants, safer VEZHA/list handling, and tidier imports; updated README and ran the full Maven test suite.
+- Added entrance timestamp support to evacuation statuses and reports (DB schema add, service updates, Excel column), plus refreshed tests/README.
