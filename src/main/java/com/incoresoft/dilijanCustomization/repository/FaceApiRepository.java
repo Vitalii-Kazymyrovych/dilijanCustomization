@@ -201,7 +201,14 @@ public class FaceApiRepository {
                     ? java.util.Collections.emptyList()
                     : page.getData();
             all.addAll(data);
-            if (data.size() < pageLimit) break; // last page
+
+            Integer total = page == null ? null : page.getTotal();
+            Integer pages = page == null ? null : page.getPages();
+            int currentPage = (pageLimit > 0) ? (offset / pageLimit) + 1 : 1;
+            boolean lastByTotal = total != null && offset + data.size() >= total;
+            boolean lastByPages = pages != null && currentPage >= pages;
+
+            if (data.isEmpty() || data.size() < pageLimit || lastByTotal || lastByPages) break; // last page
             offset += pageLimit;
         }
         return all;
