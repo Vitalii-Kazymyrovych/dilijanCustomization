@@ -1,0 +1,71 @@
+package com.incoresoft.dilijanCustomization.repository;
+
+import com.incoresoft.dilijanCustomization.config.VezhaApiProps;
+import com.incoresoft.dilijanCustomization.domain.shared.dto.DetectionDto;
+import com.incoresoft.dilijanCustomization.domain.shared.dto.DetectionsResponse;
+import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
+import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.client.RestTemplate;
+
+import java.util.List;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.when;
+
+class FaceApiRepositoryTest {
+
+    @Test
+    void aggregatesDetectionsAcrossPages() {
+        RestTemplate restTemplate = Mockito.mock(RestTemplate.class);
+        RestTemplateBuilder builder = Mockito.mock(RestTemplateBuilder.class);
+        VezhaApiProps props = new VezhaApiProps();
+        props.setBaseUrl("http://example");
+        props.setToken("token");
+
+        FaceApiRepository repo = Mockito.spy(new FaceApiRepository(restTemplate, props, builder));
+
+        DetectionDto d1 = new DetectionDto();
+        d1.setId(1L);
+        d1.setTimestamp(10L);
+        DetectionDto d2 = new DetectionDto();
+        d2.setId(2L);
+        d2.setTimestamp(20L);
+
+        DetectionsResponse page1 = new DetectionsResponse();
+        page1.setData(List.of(d1));
+        DetectionsResponse page2 = new DetectionsResponse();
+        page2.setData(List.of(d2));
+
+        doReturn(page1, page2).when(repo)
+                .getDetectionsFiltered(any(), anyList(), any(), any(), anyInt(), anyInt(), anyString());
+
+        List<DetectionDto> all = repo.getAllDetectionsInWindow(5L, List.of(1L), 0L, 100L, 1);
+        assertThat(all).containsExactly(d1, d2);
+    }
+
+    @Test
+    void downloadsStorageObjectThroughRestTemplate() {
+        RestTemplate restTemplate = Mockito.mock(RestTemplate.class);
+        RestTemplateBuilder builder = Mockito.mock(RestTemplateBuilder.class);
+        when(builder.build()).thenReturn(restTemplate);
+        VezhaApiProps props = new VezhaApiProps();
+        props.setBaseUrl("http://example/api");
+        props.setToken("token");
+
+        FaceApiRepository repo = new FaceApiRepository(restTemplate, props, builder);
+
+        when(restTemplate.exchange(anyString(), eq(HttpMethod.GET), any(HttpEntity.class), eq(byte[].class)))
+                .thenReturn(ResponseEntity.ok(new byte[]{1, 2, 3}));
+
+        byte[] result = repo.downloadStorageObject("image.jpg");
+        assertThat(result).containsExactly(1, 2, 3);
+
+        assertThat(repo.downloadStorageObject("  ")).isEmpty();
+    }
+}
