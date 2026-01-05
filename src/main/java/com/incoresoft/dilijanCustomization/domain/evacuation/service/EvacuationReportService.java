@@ -35,6 +35,7 @@ public class EvacuationReportService {
     private final EvacuationStatusService evacuationStatusService;
 
     public File buildEvacuationReport(List<Long> listIds) throws Exception {
+        evacuationStatusService.refreshStatuses();
         List<Long> sortedIds = new ArrayList<>(listIds);
         Collections.sort(sortedIds);
         Map<FaceListDto, List<ListItemDto>> data = new LinkedHashMap<>();

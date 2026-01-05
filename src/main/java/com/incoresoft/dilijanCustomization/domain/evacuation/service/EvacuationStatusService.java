@@ -16,12 +16,19 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.BufferedWriter;
+import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
+
+import static org.apache.commons.lang3.StringEscapeUtils.escapeCsv;
 
 /**
  * Вычисляет и сохраняет статусы эвакуации в таблицу PostgreSQL.
@@ -40,6 +47,11 @@ public class EvacuationStatusService {
     public void init() {
         // При использовании Spring Data JPA таблица создаётся автоматически,
         // поэтому просто рассчитываем статусы при старте.
+        try {
+            initializeDatabaseAndTable();
+        } catch (Exception e) {
+            log.warn("Exception was thrown while db initialization: {}", e.getMessage(), e);
+        }
         refreshStatuses();
     }
 
