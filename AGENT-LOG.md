@@ -3,3 +3,4 @@
 - Documented the expanded test suite and execution notes in README.
 - Removed mockito-inline dependency to rely on starter-managed Mockito versions and avoid resolution issues.
 - Noted Mockito dependency guidance in README testing notes.
+- Hardened `FaceApiRepository#getAllDetectionsInWindow` to stop using pages/total metadata and adjusted its test to prevent pagination hangs; documented the pagination guard in README.
