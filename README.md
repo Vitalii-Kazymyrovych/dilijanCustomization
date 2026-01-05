@@ -68,3 +68,4 @@ Configuration is loaded from `config/config.yaml` (not committed) with defaults 
 ## Testing notes
 - Unit tests now cover the report builders (`ReportService`, `AttendanceReportService`, `EvacuationReportService`), initialization helpers (`UnknownListInitializer`, `UnknownListRegistry`), VEZHA client pagination (`FaceApiRepository`), and evacuation status persistence logic (`EvacuationStatusService`).
 - Tests rely on mocks for VEZHA/Telegram/PostgreSQL; they do not make network calls at runtime.
+- Mockito dependencies are provided by `spring-boot-starter-test`; no additional mockito artifacts are required.
