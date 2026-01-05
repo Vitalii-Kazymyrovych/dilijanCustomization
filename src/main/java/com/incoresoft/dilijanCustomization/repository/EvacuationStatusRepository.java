@@ -28,8 +28,9 @@ public interface EvacuationStatusRepository extends JpaRepository<EvacuationStat
      * This uses a JPQL update to modify only the status flag.
      */
     @Modifying
-    @Query("update EvacuationStatus e set e.status = :status where e.listId = :listId and e.listItemId = :listItemId")
+    @Query("update EvacuationStatus e set e.status = :status, e.entranceTime = :entranceTime where e.listId = :listId and e.listItemId = :listItemId")
     void updateStatus(@Param("listId") Long listId,
                       @Param("listItemId") Long listItemId,
-                      @Param("status") Boolean status);
+                      @Param("status") Boolean status,
+                      @Param("entranceTime") Long entranceTime);
 }

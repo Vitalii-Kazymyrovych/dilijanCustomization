@@ -1,6 +1,7 @@
 package com.incoresoft.dilijanCustomization.domain.shared.service;
 
 import com.incoresoft.dilijanCustomization.domain.attendance.dto.CafeteriaPivotRow;
+import com.incoresoft.dilijanCustomization.domain.evacuation.dto.EvacuationReportRow;
 import com.incoresoft.dilijanCustomization.domain.shared.dto.FaceListDto;
 import com.incoresoft.dilijanCustomization.domain.shared.dto.ListImage;
 import com.incoresoft.dilijanCustomization.domain.shared.dto.ListItemDto;
@@ -12,7 +13,10 @@ import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.io.FileInputStream;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
 
@@ -67,16 +71,22 @@ class ReportServiceTest {
         item.setImages(List.of(image));
 
         File out = File.createTempFile("evac-", ".xlsx");
-        File result = service.exportEvacuationWorkbook(Map.of(list, List.of(item)), out);
+        long entranceTime = 1_701_000_000_000L;
+        EvacuationReportRow row = new EvacuationReportRow(item, entranceTime);
+        File result = service.exportEvacuationWorkbook(Map.of(list, List.of(row)), out);
 
         try (FileInputStream fis = new FileInputStream(result); XSSFWorkbook wb = new XSSFWorkbook(fis)) {
             Sheet sheet = wb.getSheet("List_Unsafe_Name_");
             assertThat(sheet).isNotNull();
             Row data = sheet.getRow(1);
             assertThat(data.getCell(0).getStringCellValue()).isEqualTo("On site");
-            assertThat(data.getCell(2).getNumericCellValue()).isEqualTo(5);
-            assertThat(data.getCell(3).getStringCellValue()).isEqualTo("John Doe");
-            assertThat(data.getCell(4).getStringCellValue()).isEqualTo("comment");
+            String expectedTime = Instant.ofEpochMilli(entranceTime)
+                    .atZone(ZoneId.systemDefault())
+                    .format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+            assertThat(data.getCell(1).getStringCellValue()).isEqualTo(expectedTime);
+            assertThat(data.getCell(3).getNumericCellValue()).isEqualTo(5);
+            assertThat(data.getCell(4).getStringCellValue()).isEqualTo("John Doe");
+            assertThat(data.getCell(5).getStringCellValue()).isEqualTo("comment");
         }
     }
 }

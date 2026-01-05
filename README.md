@@ -13,10 +13,12 @@ This Spring Boot service glues the VEZHA face-recognition API, Telegram, and Exc
   - deletes items when VEZHA signals removal;
   - performs weekly cleanup of the unknown list.
 - **Evacuation domain**: `EvacuationStatusService` periodically pulls detections for time-attendance-enabled lists, determines who last entered vs. exited, and persists statuses via `EvacuationStatusRepository` (PostgreSQL). `EvacuationReportService` refreshes statuses and assembles an XLSX workbook through `ReportService`, which embeds photos and dropdowns.
+  - The evacuation status table now also stores the timestamp of the last entrance detection per person (`entrance_time`) so the report can display when each employee entered.
 - **Cafeteria attendance**: `AttendanceReportService` defines meal time windows, counts unique list item detections per meal, and passes pivot rows to `ReportService` for XLSX export. A nightly schedule can auto-run the report.
 - **Configuration & infrastructure**:
   - External config lives in `config/config.yaml` (see `config/config.yaml.example`); properties are bound via `*Props` classes and injected into the beans above.
   - `HttpClientConfig` creates the authenticated VEZHA `RestTemplate`; `PostgresDataSourceConfig` wires HikariCP using `postgres.*` settings; `SchedulerConfig` sets a shared scheduler with centralized error handling.
+  - Evacuation DB bootstrap now ensures the `entrance_time` column exists via `ALTER TABLE IF NOT EXISTS`, so upgrading preserves existing rows while adding entrance timestamps.
 
 ## Key flows
 - **Unknown person add/remove**
@@ -25,8 +27,8 @@ This Spring Boot service glues the VEZHA face-recognition API, Telegram, and Exc
   3. The service queries detections near the timestamp, resolves/creates the unknown list item, or deletes it when appropriate.
 - **Evacuation report**
   1. A request to `/evacuation/report?listIds=...` or a Telegram callback triggers `EvacuationReportService`.
-  2. The service asks `EvacuationStatusService` to recompute statuses (using VEZHA detections) and load active list item ids from PostgreSQL.
-  3. `ReportService` builds one sheet per list with status dropdowns and embedded photos; the controller streams it as XLSX.
+  2. The service asks `EvacuationStatusService` to recompute statuses (using VEZHA detections) and load active list item ids from PostgreSQL, including each person’s most recent entrance time.
+  3. `ReportService` builds one sheet per list with status dropdowns, entrance time column, and embedded photos; the controller streams it as XLSX.
 - **Cafeteria attendance report**
   1. Scheduler or `/cafeteria/build` triggers `AttendanceReportService`.
   2. Detections are pulled for configured analytics IDs and time windows; unique person counts per meal/list are calculated.

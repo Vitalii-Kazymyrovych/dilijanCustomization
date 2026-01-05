@@ -1,5 +1,7 @@
 package com.incoresoft.dilijanCustomization.domain.evacuation.service;
 
+import com.incoresoft.dilijanCustomization.domain.evacuation.dto.EvacuationReportRow;
+import com.incoresoft.dilijanCustomization.domain.evacuation.dto.EvacuationStatus;
 import com.incoresoft.dilijanCustomization.domain.shared.dto.FaceListDto;
 import com.incoresoft.dilijanCustomization.domain.shared.dto.ListItemDto;
 import com.incoresoft.dilijanCustomization.domain.shared.dto.ListItemsResponse;
@@ -52,22 +54,22 @@ public class EvacuationReportService {
     private final EvacuationStatusService evacuationStatusService;
 
     public File buildEvacuationReport(List<Long> listIds) throws Exception {
-        Map<FaceListDto, List<ListItemDto>> reportData = collectReportData(listIds);
+        Map<FaceListDto, List<EvacuationReportRow>> reportData = collectReportData(listIds);
         File out = File.createTempFile("evacuation-", ".xlsx");
         return reportService.exportEvacuationWorkbook(reportData, out);
     }
 
-    private Map<FaceListDto, List<ListItemDto>> collectReportData(List<Long> listIds) {
+    private Map<FaceListDto, List<EvacuationReportRow>> collectReportData(List<Long> listIds) {
         evacuationStatusService.refreshStatuses();
         List<Long> sortedIds = new ArrayList<>(listIds);
         Collections.sort(sortedIds);
-        Map<FaceListDto, List<ListItemDto>> data = new LinkedHashMap<>();
+        Map<FaceListDto, List<EvacuationReportRow>> data = new LinkedHashMap<>();
         for (Long listId : sortedIds) {
             FaceListDto listMeta = fetchFaceListMeta(listId).orElse(null);
             if (listMeta == null) continue;
             // Получаем ID list_item_id со статусом true из БД через JPA-сервис
-            Set<Long> activeIds = evacuationStatusService.getActiveListItemIds(listId);
-            List<ListItemDto> present = filterPresentItems(activeIds, fetchAllListItems(listId));
+            Map<Long, EvacuationStatus> activeStatuses = evacuationStatusService.getActiveStatuses(listId);
+            List<EvacuationReportRow> present = filterPresentItems(activeStatuses, fetchAllListItems(listId));
             data.put(listMeta, present);
         }
         return data;
@@ -89,10 +91,11 @@ public class EvacuationReportService {
         return (resp != null && resp.getData() != null) ? resp.getData() : List.of();
     }
 
-    private List<ListItemDto> filterPresentItems(Set<Long> activeIds, List<ListItemDto> items) {
+    private List<EvacuationReportRow> filterPresentItems(Map<Long, EvacuationStatus> activeStatuses, List<ListItemDto> items) {
         return items.stream()
-                .filter(it -> it.getId() != null && activeIds.contains(it.getId()))
+                .filter(it -> it.getId() != null && activeStatuses.containsKey(it.getId()))
                 .sorted(Comparator.comparing(li -> Optional.ofNullable(li.getName()).orElse("").toLowerCase(Locale.ROOT)))
+                .map(li -> new EvacuationReportRow(li, activeStatuses.get(li.getId()).getEntranceTime()))
                 .toList();
     }
 

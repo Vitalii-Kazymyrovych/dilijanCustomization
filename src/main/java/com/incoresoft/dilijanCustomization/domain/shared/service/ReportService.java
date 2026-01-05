@@ -1,6 +1,7 @@
 package com.incoresoft.dilijanCustomization.domain.shared.service;
 
 import com.incoresoft.dilijanCustomization.domain.attendance.dto.CafeteriaPivotRow;
+import com.incoresoft.dilijanCustomization.domain.evacuation.dto.EvacuationReportRow;
 import com.incoresoft.dilijanCustomization.domain.shared.dto.FaceListDto;
 import com.incoresoft.dilijanCustomization.domain.shared.dto.ListItemDto;
 import com.incoresoft.dilijanCustomization.repository.FaceApiRepository;
@@ -15,7 +16,10 @@ import org.springframework.util.StringUtils;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
 
@@ -25,6 +29,7 @@ import java.util.Map;
 public class ReportService {
     private static final float ROW_HEIGHT_PT = 150f;
     private static final int COL_WIDTH_CHECKBOX = 15 * 256;
+    private static final int COL_WIDTH_TIME    = 25 * 256;
     private static final int COL_WIDTH_PHOTO   = 30 * 256;
     private static final int COL_WIDTH_NAME    = 50 * 256;
     private static final int COL_WIDTH_COMMENT = 50 * 256;
@@ -102,43 +107,50 @@ public class ReportService {
      * Build an XLSX with a sheet per list: Status | Photo | ID | Name | Comment.
      * Downloads and embeds the first image for each ListItemDto (if present).
      */
-    public File exportEvacuationWorkbook(Map<FaceListDto, List<ListItemDto>> data, File outFile) {
+    public File exportEvacuationWorkbook(Map<FaceListDto, List<EvacuationReportRow>> data, File outFile) {
         try (Workbook wb = new XSSFWorkbook()) {
-            for (Map.Entry<FaceListDto, List<ListItemDto>> e : data.entrySet()) {
+            for (Map.Entry<FaceListDto, List<EvacuationReportRow>> e : data.entrySet()) {
                 FaceListDto list = e.getKey();
-                List<ListItemDto> items = e.getValue();
+                List<EvacuationReportRow> items = e.getValue();
 
                 String sheetName = sanitizeSheetName(
                         StringUtils.hasText(list.getName()) ? list.getName() : "List_" + list.getId()
                 );
                 Sheet sh = wb.createSheet(sheetName);
 
-                // Header: Status, Photo, ID, Name, Comment
+                // Header: Status, Entrance time, Photo, ID, Name, Comment
                 Row header = sh.createRow(0);
                 header.createCell(0).setCellValue("Status");
-                header.createCell(1).setCellValue("Photo");
-                header.createCell(2).setCellValue("ID");
-                header.createCell(3).setCellValue("Name");
-                header.createCell(4).setCellValue("Comment");
+                header.createCell(1).setCellValue("Entrance time");
+                header.createCell(2).setCellValue("Photo");
+                header.createCell(3).setCellValue("ID");
+                header.createCell(4).setCellValue("Name");
+                header.createCell(5).setCellValue("Comment");
 
                 sh.setDefaultRowHeightInPoints(ROW_HEIGHT_PT);
                 sh.setColumnWidth(0, COL_WIDTH_CHECKBOX);
-                sh.setColumnWidth(1, COL_WIDTH_PHOTO);
-                sh.setColumnWidth(2, COL_WIDTH_ID);
-                sh.setColumnWidth(3, COL_WIDTH_NAME);
-                sh.setColumnWidth(4, COL_WIDTH_COMMENT);
+                sh.setColumnWidth(1, COL_WIDTH_TIME);
+                sh.setColumnWidth(2, COL_WIDTH_PHOTO);
+                sh.setColumnWidth(3, COL_WIDTH_ID);
+                sh.setColumnWidth(4, COL_WIDTH_NAME);
+                sh.setColumnWidth(5, COL_WIDTH_COMMENT);
                 header.setHeightInPoints(24f);
 
                 Drawing<?> drawing = sh.createDrawingPatriarch();
 
                 int r = 1;
-                for (ListItemDto item : items) {
+                for (EvacuationReportRow rowData : items) {
+                    ListItemDto item = rowData.item();
                     Row row = sh.createRow(r);
 
                     // Status drop-down with default "On site"
                     Cell statusCell = row.createCell(0);
                     statusCell.setCellValue("On site");
                     statusCell.setCellStyle(checkboxColumnStyle(wb));
+
+                    // Entrance time
+                    Cell entranceCell = row.createCell(1);
+                    entranceCell.setCellValue(formatEntranceTime(rowData.entranceTime()));
 
                     // Photo
                     try {
@@ -151,8 +163,8 @@ public class ReportService {
                                 ClientAnchor anchor = helper.createClientAnchor();
                                 anchor.setRow1(r);
                                 anchor.setRow2(r + 1);
-                                anchor.setCol1(1);
-                                anchor.setCol2(2);
+                                anchor.setCol1(2);
+                                anchor.setCol2(3);
                                 Picture picture = drawing.createPicture(anchor, picIdx);
                                 picture.resize(1.0, 1.0);
                             }
@@ -162,16 +174,16 @@ public class ReportService {
                     }
 
                     // ID
-                    Cell idCell = row.createCell(2);
+                    Cell idCell = row.createCell(3);
                     if (item.getId() != null) {
                         idCell.setCellValue(item.getId());
                     }
 
                     // Name
-                    row.createCell(3).setCellValue(nullSafe(item.getName()));
+                    row.createCell(4).setCellValue(nullSafe(item.getName()));
 
                     // Comment
-                    row.createCell(4).setCellValue(nullSafe(item.getComment()));
+                    row.createCell(5).setCellValue(nullSafe(item.getComment()));
 
                     r++;
                 }
@@ -229,6 +241,15 @@ public class ReportService {
         cs.setAlignment(HorizontalAlignment.CENTER);
         cs.setVerticalAlignment(VerticalAlignment.CENTER);
         return cs;
+    }
+
+    private static String formatEntranceTime(Long entranceTime) {
+        if (entranceTime == null) {
+            return "";
+        }
+        return Instant.ofEpochMilli(entranceTime)
+                .atZone(ZoneId.systemDefault())
+                .format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
     }
 
     private static String firstImagePath(ListItemDto item) {

@@ -22,6 +22,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -101,6 +102,22 @@ public class EvacuationStatusService {
         }
     }
 
+    /**
+     * Retrieve full active status rows (including entrance timestamps) for a list.
+     * @param listId identifier of the face list
+     * @return map keyed by list_item_id with the corresponding status row
+     */
+    public Map<Long, EvacuationStatus> getActiveStatuses(Long listId) {
+        try {
+            return evacuationStatusRepository.findByListIdAndStatusTrue(listId)
+                    .stream()
+                    .collect(Collectors.toMap(EvacuationStatus::getListItemId, it -> it, (a, b) -> a, LinkedHashMap::new));
+        } catch (Exception e) {
+            log.error("Query failed: {}", e.getMessage(), e);
+            return Collections.emptyMap();
+        }
+    }
+
     // --- внутренние методы ---
 
     private void updateListStatuses(FaceListDto faceList, Long startMillis, Long endMillis) throws Exception {
@@ -131,14 +148,23 @@ public class EvacuationStatusService {
     /** Обновление статуса одного пользователя в списке. */
     @Transactional
     public void updateStatus(Long listId, Long listItemId, boolean status) {
+        updateStatus(listId, listItemId, status, status ? System.currentTimeMillis() : null);
+    }
+
+    /**
+     * Update status and entrance time for a single list item. If the record does not yet exist,
+     * it will be inserted.
+     */
+    public void updateStatus(Long listId, Long listItemId, boolean status, Long entranceTime) {
         try {
-            evacuationStatusRepository.updateStatus(listId, listItemId, status);
+            evacuationStatusRepository.updateStatus(listId, listItemId, status, entranceTime);
             // если записи нет, сохранить новую
             if (!evacuationStatusRepository.existsById(new EvacuationStatusPK(listId, listItemId))) {
                 EvacuationStatus es = new EvacuationStatus();
                 es.setListId(listId);
                 es.setListItemId(listItemId);
                 es.setStatus(status);
+                es.setEntranceTime(entranceTime);
                 evacuationStatusRepository.save(es);
             }
         } catch (Exception ex) {
@@ -178,9 +204,11 @@ public class EvacuationStatusService {
                 "enter_stream_ids INT[], ",
                 "exit_stream_ids INT[], ",
                 "status BOOLEAN, ",
+                "entrance_time BIGINT, ",
                 "PRIMARY KEY (list_id, list_item_id)",
                 ")");
         runPsql(dbName, createTable);
+        runPsql(dbName, "ALTER TABLE IF EXISTS evacuation ADD COLUMN IF NOT EXISTS entrance_time BIGINT");
     }
 
     private void runPsql(String db, String sql) throws Exception {
@@ -267,6 +295,7 @@ public class EvacuationStatusService {
             evacuationStatus.setEnterStreamIds(attendanceConfig.entranceArray());
             evacuationStatus.setExitStreamIds(attendanceConfig.exitArray());
             evacuationStatus.setStatus(status);
+            evacuationStatus.setEntranceTime(status && detection != null ? detection.getTimestamp() : null);
             statuses.add(evacuationStatus);
         }
         return statuses;

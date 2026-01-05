@@ -1,5 +1,7 @@
 package com.incoresoft.dilijanCustomization.domain.evacuation.service;
 
+import com.incoresoft.dilijanCustomization.domain.evacuation.dto.EvacuationReportRow;
+import com.incoresoft.dilijanCustomization.domain.evacuation.dto.EvacuationStatus;
 import com.incoresoft.dilijanCustomization.domain.shared.dto.FaceListDto;
 import com.incoresoft.dilijanCustomization.domain.shared.dto.ListItemDto;
 import com.incoresoft.dilijanCustomization.domain.shared.dto.ListItemsResponse;
@@ -52,20 +54,25 @@ class EvacuationReportServiceTest {
         when(repo.getListItems(eq(2L), anyString(), anyString(), anyInt(), anyInt(), anyString(), anyString()))
                 .thenReturn(itemsResponse);
 
-        when(statusService.getActiveListItemIds(1L)).thenReturn(Set.of(10L));
-        when(statusService.getActiveListItemIds(2L)).thenReturn(Set.of());
+        EvacuationStatus status = new EvacuationStatus();
+        status.setListId(1L);
+        status.setListItemId(10L);
+        status.setEntranceTime(123L);
+        when(statusService.getActiveStatuses(1L)).thenReturn(Map.of(10L, status));
+        when(statusService.getActiveStatuses(2L)).thenReturn(Map.of());
 
         File exported = File.createTempFile("evac-report-", ".xlsx");
-        ArgumentCaptor<Map<FaceListDto, List<ListItemDto>>> dataCaptor = ArgumentCaptor.forClass(Map.class);
+        ArgumentCaptor<Map<FaceListDto, List<EvacuationReportRow>>> dataCaptor = ArgumentCaptor.forClass(Map.class);
         when(reportService.exportEvacuationWorkbook(dataCaptor.capture(), any(File.class))).thenReturn(exported);
 
         EvacuationReportService service = new EvacuationReportService(repo, reportService, statusService);
         File result = service.buildEvacuationReport(List.of(2L, 1L));
 
         assertThat(result).isEqualTo(exported);
-        Map<FaceListDto, List<ListItemDto>> data = dataCaptor.getValue();
+        Map<FaceListDto, List<EvacuationReportRow>> data = dataCaptor.getValue();
         assertThat(data).hasSize(2);
-        assertThat(data.get(list1)).extracting(ListItemDto::getId).containsExactly(10L);
+        assertThat(data.get(list1)).extracting(r -> r.item().getId()).containsExactly(10L);
+        assertThat(data.get(list1)).extracting(EvacuationReportRow::entranceTime).containsExactly(123L);
         assertThat(data.get(list2)).isEmpty();
     }
 
