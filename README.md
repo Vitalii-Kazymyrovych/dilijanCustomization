@@ -8,6 +8,7 @@ This Spring Boot service glues the VEZHA face-recognition API, Telegram, and Exc
   - `CafeteriaReportController` and `EvacuationReportController` expose report generation endpoints (per-day attendance pivot and multi-list evacuation workbooks respectively).
 - **Telegram bot**: `TelegramBot` orchestrates chat flows for evacuation and attendance reports, forwards uploaded evacuation workbooks to `EvacuationStatusService`, and uses `AttendanceReportService` / `EvacuationReportService` to generate XLSX files on demand.
 - **VEZHA integration**: `FaceApiRepository` wraps all VEZHA calls (detections, list CRUD, storage downloads). Higher-level services rely on it for analytics queries, unknown person management, and pulling list metadata/images.
+  - Detection queries send a multipart request that always contains an empty `image` part (matching the VEZHA Swagger contract) even when filtering without an uploaded file.
 - **Unknown-person pipeline**: `UnknownListInitializer` ensures a dedicated face list exists at startup and records its id in `UnknownListRegistry`. `UnknownPersonService` then:
   - searches recent detections around a webhook event and creates a list item when the face isn’t in any list;
   - deletes items when VEZHA signals removal;

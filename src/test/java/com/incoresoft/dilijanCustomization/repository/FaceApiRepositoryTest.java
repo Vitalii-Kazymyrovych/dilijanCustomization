@@ -15,12 +15,14 @@ import org.springframework.web.client.RestTemplate;
 
 import java.util.List;
 
+import static org.hamcrest.Matchers.containsString;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.content;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 class FaceApiRepositoryTest {
@@ -91,6 +93,7 @@ class FaceApiRepositoryTest {
 
         server.expect(requestTo("http://example/api/face/detections?limit=1&sort_order=asc&offset=0"))
                 .andExpect(method(HttpMethod.POST))
+                .andExpect(content().string(containsString("name=\"image\"")))
                 .andRespond(withSuccess("{\"data\":[{\"id\":1,\"timestamp\":5}],\"total\":1,\"pages\":1,\"status\":\"ok\"}", MediaType.APPLICATION_JSON));
 
         List<DetectionDto> all = repo.getAllDetectionsInWindow(null, null, null, null, 1);
