@@ -22,9 +22,9 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Repository;
-import org.springframework.core.io.ByteArrayResource;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
+import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
@@ -181,9 +181,22 @@ public class FaceApiRepository {
                             req,
                             DetectionsResponse.class);
             return resp.getBody();
+        } catch (HttpStatusCodeException e) {
+            String body = e.getResponseBodyAsString();
+            String message = String.format(
+                    "Failed to fetch detections: HTTP %s%s%s",
+                    e.getStatusCode().value(),
+                    (e.getStatusText() == null || e.getStatusText().isBlank())
+                            ? ""
+                            : " " + e.getStatusText(),
+                    (body == null || body.isBlank()) ? "" : " - " + body
+            );
+            log.error("[GET DETECTIONS] {}", message, e);
+            throw new RuntimeException(message, e);
         } catch (Exception e) {
-            log.error("[GET DETECTIONS]", e);
-            throw new RuntimeException();
+            String message = "Failed to fetch detections: " + e.getMessage();
+            log.error("[GET DETECTIONS] {}", message, e);
+            throw new RuntimeException(message, e);
         }
     }
 
@@ -371,12 +384,6 @@ public class FaceApiRepository {
 
     private static HttpEntity<MultiValueMap<String, Object>> getRequestWithEmptyMultipart() {
         MultiValueMap<String, Object> emptyBody = new LinkedMultiValueMap<>();
-        emptyBody.add("image", new ByteArrayResource(new byte[0]) {
-            @Override
-            public String getFilename() {
-                return "image.png"; // VEZHA requires a non-blank filename for the image part
-            }
-        });
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.MULTIPART_FORM_DATA);
         headers.setAccept(List.of(MediaType.APPLICATION_JSON));

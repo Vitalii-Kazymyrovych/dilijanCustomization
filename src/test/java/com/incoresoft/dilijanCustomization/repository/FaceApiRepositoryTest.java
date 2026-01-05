@@ -8,15 +8,17 @@ import org.mockito.Mockito;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpMethod;
-import org.springframework.http.ResponseEntity;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.List;
 
-import static org.hamcrest.Matchers.containsString;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.hamcrest.Matchers.not;
+import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.when;
@@ -24,6 +26,7 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.content;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
 
 class FaceApiRepositoryTest {
 
@@ -91,13 +94,39 @@ class FaceApiRepositoryTest {
 
         FaceApiRepository repo = new FaceApiRepository(restTemplate, props, builder);
 
-        server.expect(requestTo("http://example/api/face/detections?limit=1&sort_order=asc&offset=0"))
+        server.expect(requestTo("http://example/api/face/detections?limit=1&sort_order=asc&min_detection_similarity=0&offset=0"))
                 .andExpect(method(HttpMethod.POST))
-                .andExpect(content().string(containsString("name=\"image\"; filename=\"image.png\"")))
+                .andExpect(content().string(not(containsString("name=\"image\""))))
                 .andRespond(withSuccess("{\"data\":[{\"id\":1,\"timestamp\":5}],\"total\":1,\"pages\":1,\"status\":\"ok\"}", MediaType.APPLICATION_JSON));
 
         List<DetectionDto> all = repo.getAllDetectionsInWindow(null, null, null, null, 1);
         assertThat(all).hasSize(1);
+
+        server.verify();
+    }
+
+    @Test
+    void surfacesHttpErrorBodyWhenDetectionsFail() {
+        RestTemplate restTemplate = new RestTemplate();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        RestTemplateBuilder builder = new RestTemplateBuilder();
+        VezhaApiProps props = new VezhaApiProps();
+        props.setBaseUrl("http://example/api");
+        props.setToken("token");
+
+        FaceApiRepository repo = new FaceApiRepository(restTemplate, props, builder);
+
+        server.expect(requestTo("http://example/api/face/detections?limit=500&sort_order=asc&min_detection_similarity=0&start_date=1&end_date=2&list_id=3"))
+                .andExpect(method(HttpMethod.POST))
+                .andExpect(content().string(not(containsString("name=\"image\""))))
+                .andRespond(withServerError()
+                        .body("[{\"type\":\"ERROR_FAILED_TO_PROCESS_REQUEST\",\"args\":[\"image processing failed\"]}]")
+                        .contentType(MediaType.APPLICATION_JSON));
+
+        assertThatThrownBy(() -> repo.getDetectionsFiltered(3L, List.of(), 1L, 2L, 500, null, "asc"))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("500")
+                .hasMessageContaining("image processing failed");
 
         server.verify();
     }
