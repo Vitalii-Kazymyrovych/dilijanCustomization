@@ -9,6 +9,8 @@ import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.List;
@@ -17,6 +19,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 class FaceApiRepositoryTest {
 
@@ -71,5 +76,26 @@ class FaceApiRepositoryTest {
         assertThat(result).containsExactly(1, 2, 3);
 
         assertThat(repo.downloadStorageObject("  ")).isEmpty();
+    }
+
+    @Test
+    void buildsDetectionUrlWithoutDuplicatingSlashes() {
+        RestTemplate restTemplate = new RestTemplate();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        RestTemplateBuilder builder = new RestTemplateBuilder();
+        VezhaApiProps props = new VezhaApiProps();
+        props.setBaseUrl("http://example/api/");
+        props.setToken("token");
+
+        FaceApiRepository repo = new FaceApiRepository(restTemplate, props, builder);
+
+        server.expect(requestTo("http://example/api/face/detections?limit=1&sort_order=asc&offset=0"))
+                .andExpect(method(HttpMethod.POST))
+                .andRespond(withSuccess("{\"data\":[{\"id\":1,\"timestamp\":5}],\"total\":1,\"pages\":1,\"status\":\"ok\"}", MediaType.APPLICATION_JSON));
+
+        List<DetectionDto> all = repo.getAllDetectionsInWindow(null, null, null, null, 1);
+        assertThat(all).hasSize(1);
+
+        server.verify();
     }
 }

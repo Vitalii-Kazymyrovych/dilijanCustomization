@@ -71,6 +71,7 @@ Configuration is loaded from `config/config.yaml` (not committed) with defaults 
 ## Testing notes
 - Unit tests now cover the report builders (`ReportService`, `AttendanceReportService`, `EvacuationReportService`), initialization helpers (`UnknownListInitializer`, `UnknownListRegistry`), VEZHA client pagination (`FaceApiRepository`), and evacuation status persistence logic (`EvacuationStatusService`).
 - Pagination in `FaceApiRepository#getAllDetectionsInWindow` now also respects the response `total/pages` metadata so loops terminate even when each page is full.
+- `FaceApiRepository` normalizes `vezha.api.base-url` values so trailing slashes do not break detection queries.
 - Tests rely on mocks for VEZHA/Telegram/PostgreSQL; they do not make network calls at runtime.
 - Mockito dependencies are provided by `spring-boot-starter-test`; no additional mockito artifacts are required.
 - Core services extract helper methods/constants for readability and now guard more defensively against missing VEZHA responses or empty time-attendance settings when computing statuses and reports.

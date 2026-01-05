@@ -33,6 +33,7 @@ import java.time.Duration;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.UnaryOperator;
 
 @Slf4j
 @Repository
@@ -44,21 +45,18 @@ public class FaceApiRepository {
 
     // POST /face/detections (multipart: -F image=) + query params (limit, sort_order, start_date, end_date)
     public DetectionsResponse getRecentDetections(Integer limit, String sortOrder, Long startTs, Long endTs) {
-        String url = UriComponentsBuilder
-                .fromPath("/face/detections")
-                .queryParam("limit",      (limit == null ? 100 : limit))
+        String url = buildApiUrl("/face/detections", b -> b
+                .queryParam("limit", (limit == null ? 100 : limit))
                 .queryParam("sort_order", (sortOrder == null ? "asc" : sortOrder))
                 .queryParamIfPresent("start_date", java.util.Optional.ofNullable(startTs))
-                .queryParamIfPresent("end_date",   java.util.Optional.ofNullable(endTs))
-                .build()
-                .toUriString();
+                .queryParamIfPresent("end_date", java.util.Optional.ofNullable(endTs)));
 
         HttpEntity<MultiValueMap<String, Object>> emptyReq = getRequestWithEmptyMultipart();
 
         try {
             ResponseEntity<DetectionsResponse> resp =
                     vezhaApi.exchange(
-                            vezhaApiProps.getBaseUrl() + url,
+                            url,
                             HttpMethod.POST,
                             emptyReq,
                             DetectionsResponse.class);
@@ -78,8 +76,7 @@ public class FaceApiRepository {
         try {
             resp =
                     vezhaApi.exchange(
-                            vezhaApiProps.getBaseUrl() +
-                                    "/face/list_items/from_detection",
+                            buildApiUrl("/face/list_items/from_detection"),
                             HttpMethod.POST,
                             entity,
                             ListItemDto.class);
@@ -94,21 +91,19 @@ public class FaceApiRepository {
     public ListItemsResponse getListItems(Long listId, String name, String comment,
                                           Integer offset, Integer limit,
                                           String order, String sortBy) {
-        String url = UriComponentsBuilder
-                .fromPath("/face/list_items")
+        String url = buildApiUrl("/face/list_items", b -> b
                 .queryParam("list_id", listId)
                 .queryParam("name",    name == null ? "" : name)
                 .queryParam("comment", comment == null ? "" : comment)
                 .queryParam("offset",  offset == null ? 0 : offset)
                 .queryParam("limit",   limit  == null ? 20 : limit)
                 .queryParam("order",   order  == null ? "asc" : order)
-                .queryParam("sort_by", sortBy == null ? "name" : sortBy)
-                .build().toUriString();
+                .queryParam("sort_by", sortBy == null ? "name" : sortBy));
         ResponseEntity<ListItemsResponse> resp;
         try {
             resp =
                     vezhaApi.exchange(
-                            vezhaApiProps.getBaseUrl() + url,
+                            url,
                             HttpMethod.GET,
                             null,
                             ListItemsResponse.class);
@@ -122,7 +117,7 @@ public class FaceApiRepository {
     // DELETE /face/list_items/{id}
     public void deleteListItem(Long id) {
         try {
-            vezhaApi.delete(vezhaApiProps.getBaseUrl() + "/face/list_items/{id}", id);
+            vezhaApi.delete(buildApiUrl("/face/list_items/" + id));
         } catch (Exception e) {
             log.error("[DELETE LIST ITEM]", e);
             throw new RuntimeException(e);
@@ -131,15 +126,12 @@ public class FaceApiRepository {
 
     /** GET /face/lists?limit=100 */
     public FaceListsResponse getFaceLists(int limit) {
-        String url = UriComponentsBuilder
-                .fromPath("/face/lists")
-                .queryParam("limit", limit)
-                .build().toUriString();
+        String url = buildApiUrl("/face/lists", b -> b.queryParam("limit", limit));
 
         ResponseEntity<FaceListsResponse> resp;
         try {
             resp = vezhaApi.exchange(
-                    vezhaApiProps.getBaseUrl() + url,
+                    url,
                     HttpMethod.GET,
                     null,
                     FaceListsResponse.class);
@@ -159,9 +151,8 @@ public class FaceApiRepository {
             Integer offset,
             String sortOrder
     ) {
-        UriComponentsBuilder b = UriComponentsBuilder
-                .fromPath("/face/detections")
-                .queryParam("limit",  limit == null ? 500 : limit)
+        UriComponentsBuilder b = baseApi("/face/detections")
+                .queryParam("limit", limit == null ? 500 : limit)
                 .queryParam("sort_order", sortOrder == null ? "asc" : sortOrder);
 
         if (offset != null)      b.queryParam("offset", offset);
@@ -181,7 +172,7 @@ public class FaceApiRepository {
         try {
             ResponseEntity<DetectionsResponse> resp =
                     vezhaApi.exchange(
-                            vezhaApiProps.getBaseUrl() + url,
+                            url,
                             HttpMethod.POST,
                             req,
                             DetectionsResponse.class);
@@ -235,13 +226,10 @@ public class FaceApiRepository {
      */
     public String downloadPresenceCsv(Long listId, long exactMillis) {
         long startMillis = exactMillis - Duration.ofDays(30).toMillis();
-        String url = UriComponentsBuilder
-                .fromPath("/face/reports/presence")
+        String url = buildApiUrl("/face/reports/presence", b -> b
                 .queryParam("list_id", listId)
                 .queryParam("start_date", startMillis)
-                .queryParam("end_date", exactMillis)
-                .build()
-                .toUriString();
+                .queryParam("end_date", exactMillis));
 
         HttpHeaders headers = new HttpHeaders();
         headers.setAccept(List.of(MediaType.APPLICATION_OCTET_STREAM, MediaType.ALL));
@@ -250,7 +238,7 @@ public class FaceApiRepository {
         ResponseEntity<byte[]> resp;
         try {
             resp = vezhaApi.exchange(
-                    vezhaApiProps.getBaseUrl() + url,
+                    url,
                     HttpMethod.GET,
                     req,
                     byte[].class);
@@ -333,7 +321,7 @@ public class FaceApiRepository {
         ResponseEntity<FaceListDto> response;
         try {
             response = vezhaApi.exchange(
-                    vezhaApiProps.getBaseUrl() + "/face/lists",
+                    buildApiUrl("/face/lists"),
                     HttpMethod.POST,
                     entity,
                     FaceListDto.class);
@@ -350,9 +338,9 @@ public class FaceApiRepository {
 
     // Получить конфиг списка (входные/выходные камеры)
     public ListConfigDto getListConfig(Long listId) {
-        String url = "/face/lists/" + listId;
+        String url = buildApiUrl("/face/lists/" + listId);
         ResponseEntity<ListConfigDto> resp = vezhaApi.exchange(
-                vezhaApiProps.getBaseUrl() + url,
+                url,
                 HttpMethod.GET,
                 null,
                 ListConfigDto.class);
@@ -383,5 +371,24 @@ public class FaceApiRepository {
         headers.setContentType(MediaType.MULTIPART_FORM_DATA);
         headers.setAccept(List.of(MediaType.APPLICATION_JSON));
         return new HttpEntity<>(emptyBody, headers);
+    }
+
+    private String buildApiUrl(String path) {
+        return buildApiUrl(path, UnaryOperator.identity());
+    }
+
+    private String buildApiUrl(String path, UnaryOperator<UriComponentsBuilder> customizer) {
+        return customizer.apply(baseApi(path))
+                .build()
+                .toUriString();
+    }
+
+    private UriComponentsBuilder baseApi(String path) {
+        String base = vezhaApiProps.getBaseUrl();
+        while (base.endsWith("/")) {
+            base = base.substring(0, base.length() - 1);
+        }
+        String normalizedPath = path.startsWith("/") ? path : "/" + path;
+        return UriComponentsBuilder.fromHttpUrl(base + normalizedPath);
     }
 }
