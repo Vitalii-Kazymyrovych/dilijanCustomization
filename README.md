@@ -78,4 +78,5 @@ Configuration is loaded from `config/config.yaml` (not committed) with defaults 
 - Core services extract helper methods/constants for readability and now guard more defensively against missing VEZHA responses or empty time-attendance settings when computing statuses and reports.
 - Detection queries now send an empty multipart body (no `image` part) to mirror the browser request and avoid “image processing failed” responses when filtering by params.
 - VEZHA detection failures surface the HTTP status and response body in exceptions so logs capture upstream error details (e.g., image processing errors).
+- Expected failure paths (VEZHA detection errors, evacuation status queries) now log concise summaries at `WARN` without stack traces to keep test output clean while still surfacing the root cause.
 - Search-by-photo errors now log the HTTP status/response summary (without stack traces) so operators immediately see VEZHA’s reason, such as `ERROR_NO_FACES_DETECTED`.

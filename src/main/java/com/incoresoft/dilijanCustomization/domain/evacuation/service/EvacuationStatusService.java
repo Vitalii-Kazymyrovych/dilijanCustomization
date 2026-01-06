@@ -98,7 +98,7 @@ public class EvacuationStatusService {
                     .map(EvacuationStatus::getListItemId)
                     .collect(Collectors.toCollection(LinkedHashSet::new));
         } catch (Exception e) {
-            log.error("Query failed: {}", e.getMessage(), e);
+            log.warn("Query failed: {}; returning empty set", e.getMessage());
             return Collections.emptySet();
         }
     }
@@ -114,7 +114,7 @@ public class EvacuationStatusService {
                     .stream()
                     .collect(Collectors.toMap(EvacuationStatus::getListItemId, it -> it, (a, b) -> a, LinkedHashMap::new));
         } catch (Exception e) {
-            log.error("Query failed: {}", e.getMessage(), e);
+            log.warn("Query failed: {}; returning empty map", e.getMessage());
             return Collections.emptyMap();
         }
     }
