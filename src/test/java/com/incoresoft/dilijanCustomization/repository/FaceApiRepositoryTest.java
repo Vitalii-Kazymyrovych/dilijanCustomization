@@ -94,7 +94,7 @@ class FaceApiRepositoryTest {
 
         FaceApiRepository repo = new FaceApiRepository(restTemplate, props, builder);
 
-        server.expect(requestTo("http://example/api/face/detections?limit=1&sort_order=asc&min_detection_similarity=0&offset=0"))
+        server.expect(requestTo("http://example/api/face/detections?min_age=0&max_age=100&min_list_item_similarity=0&max_list_item_similarity=100&offset=0&limit=1&sort_order=asc"))
                 .andExpect(method(HttpMethod.POST))
                 .andExpect(content().string(not(containsString("name=\"image\""))))
                 .andRespond(withSuccess("{\"data\":[{\"id\":1,\"timestamp\":5}],\"total\":1,\"pages\":1,\"status\":\"ok\"}", MediaType.APPLICATION_JSON));
@@ -116,7 +116,7 @@ class FaceApiRepositoryTest {
 
         FaceApiRepository repo = new FaceApiRepository(restTemplate, props, builder);
 
-        server.expect(requestTo("http://example/api/face/detections?limit=500&sort_order=asc&min_detection_similarity=0&start_date=1&end_date=2&list_id=3"))
+        server.expect(requestTo("http://example/api/face/detections?start_date=1&end_date=2&list_id=3&min_age=0&max_age=100&min_list_item_similarity=0&max_list_item_similarity=100&limit=500&sort_order=asc"))
                 .andExpect(method(HttpMethod.POST))
                 .andExpect(content().string(not(containsString("name=\"image\""))))
                 .andRespond(withServerError()
