@@ -13,3 +13,4 @@
 - Added `min_detection_similarity` support to detections calls (defaulting to 0), wired the property into `VezhaApiProps`, updated the config example/README, and extended the detection URL test; ran `./mvnw -B -Dtest=FaceApiRepositoryTest test`.
 - Improved VEZHA detection error handling to surface HTTP status/response text in exceptions, added a regression test for the failure path, and documented the logging behavior.
 - Send an empty multipart body (no image part) for detection filters to mirror the browser request and avoid VEZHA “image processing failed” responses; adjusted tests/README accordingly.
+- Added search-by-photo deduplication when adding unknown persons: download detection image, POST to `/face/list_items/search_by_photo` (multipart, confidence=90), only create list item when VEZHA returns an empty array; guarded errors/invalid images by skipping additions; documented the flow and covered it with repository tests.

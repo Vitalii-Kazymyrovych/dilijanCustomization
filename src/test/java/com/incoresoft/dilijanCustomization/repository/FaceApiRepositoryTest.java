@@ -130,4 +130,46 @@ class FaceApiRepositoryTest {
 
         server.verify();
     }
+
+    @Test
+    void treatsEmptySearchByPhotoResponseAsUnique() {
+        RestTemplate restTemplate = new RestTemplate();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        RestTemplateBuilder builder = new RestTemplateBuilder();
+        VezhaApiProps props = new VezhaApiProps();
+        props.setBaseUrl("http://example/api");
+        props.setToken("token");
+
+        FaceApiRepository repo = new FaceApiRepository(restTemplate, props, builder);
+
+        server.expect(requestTo("http://example/api/face/list_items/search_by_photo?confidence=90"))
+                .andExpect(method(HttpMethod.POST))
+                .andExpect(content().string(containsString("name=\"image\"")))
+                .andExpect(content().string(containsString("filename=\"face.jpg\"")))
+                .andRespond(withSuccess("[]", MediaType.APPLICATION_JSON));
+
+        assertThat(repo.isFaceUniqueInLists(new byte[]{1, 2, 3}, null)).isTrue();
+
+        server.verify();
+    }
+
+    @Test
+    void treatsNonEmptySearchByPhotoResponseAsDuplicate() {
+        RestTemplate restTemplate = new RestTemplate();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        RestTemplateBuilder builder = new RestTemplateBuilder();
+        VezhaApiProps props = new VezhaApiProps();
+        props.setBaseUrl("http://example/api");
+        props.setToken("token");
+
+        FaceApiRepository repo = new FaceApiRepository(restTemplate, props, builder);
+
+        server.expect(requestTo("http://example/api/face/list_items/search_by_photo?confidence=90"))
+                .andExpect(method(HttpMethod.POST))
+                .andRespond(withSuccess("[{\"id\":1}]", MediaType.APPLICATION_JSON));
+
+        assertThat(repo.isFaceUniqueInLists(new byte[]{1, 2, 3}, null)).isFalse();
+
+        server.verify();
+    }
 }
