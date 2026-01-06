@@ -192,11 +192,11 @@ public class FaceApiRepository {
                             : " " + e.getStatusText(),
                     (body == null || body.isBlank()) ? "" : " - " + body
             );
-            log.error("[GET DETECTIONS] {}", message, e);
+            log.warn("[GET DETECTIONS] {}", message);
             throw new RuntimeException(message, e);
         } catch (Exception e) {
             String message = "Failed to fetch detections: " + e.getMessage();
-            log.error("[GET DETECTIONS] {}", message, e);
+            log.warn("[GET DETECTIONS] {}", message);
             throw new RuntimeException(message, e);
         }
     }

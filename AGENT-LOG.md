@@ -15,3 +15,4 @@
 - Send an empty multipart body (no image part) for detection filters to mirror the browser request and avoid VEZHA “image processing failed” responses; adjusted tests/README accordingly.
 - Added search-by-photo deduplication when adding unknown persons: download detection image, POST to `/face/list_items/search_by_photo` (multipart, confidence=90), only create list item when VEZHA returns an empty array; guarded errors/invalid images by skipping additions; documented the flow and covered it with repository tests.
 - Tuned search-by-photo error logging to output the HTTP status/response summary instead of a full stack trace and documented the change in the README.
+- Softened logging on expected failure paths in `FaceApiRepository` and `EvacuationStatusService` so tests no longer emit stack traces while still surfacing the error summaries; recorded the quieter logging in the README.
