@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.Supplier;
 
 @Slf4j
 @Service
@@ -39,6 +40,12 @@ public class UnknownPersonService {
 
         List<DetectionDto> candidates = fetchCandidateDetections(event);
         DetectionDto matchingDetection = findMatchingDetection(event, candidates);
+
+        if (!isUniqueDetection(matchingDetection)) {
+            log.info("[ADD] Skip: similar face exists in other lists (face_image={})", matchingDetection.getFaceImage());
+            return Optional.empty();
+        }
+
         String name = nextUnknownName();
         log.info("[ADD] unique name={}", name);
 
@@ -91,6 +98,32 @@ public class UnknownPersonService {
                 .findFirst()
                 .orElseThrow(() -> new IllegalStateException(
                         "No detection with matching face_image: " + event.getFaceImage()));
+    }
+
+    private boolean isUniqueDetection(DetectionDto detection) {
+        return downloadBytes(detection)
+                .map(bytes -> repo.isFaceUniqueInLists(bytes, null))
+                .orElse(false);
+    }
+
+    private Optional<byte[]> downloadBytes(DetectionDto detection) {
+        return Optional.ofNullable(detection)
+                .map(DetectionDto::getFaceImage)
+                .filter(img -> !img.isBlank())
+                .map(this::downloadImageSafely);
+    }
+
+    private byte[] downloadImageSafely(String imagePath) {
+        return executeSafe(() -> repo.downloadStorageObject(imagePath), new byte[0]);
+    }
+
+    private <T> T executeSafe(Supplier<T> supplier, T fallback) {
+        try {
+            return supplier.get();
+        } catch (Exception e) {
+            log.warn("[ADD] Failed to download face image: {}", e.getMessage());
+            return fallback;
+        }
     }
 
     private boolean isUnknownListEvent(FaceEventDto event) {

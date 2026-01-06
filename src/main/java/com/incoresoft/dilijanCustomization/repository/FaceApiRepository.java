@@ -16,6 +16,7 @@ import com.incoresoft.dilijanCustomization.domain.unknown.dto.FromDetectionReque
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -41,6 +42,8 @@ import java.util.function.UnaryOperator;
 @RequiredArgsConstructor
 public class FaceApiRepository {
     private static final int MIN_DETECTION_SIMILARITY = 0;
+    private static final int DEFAULT_SEARCH_BY_PHOTO_CONFIDENCE = 90;
+    private static final String SEARCH_BY_PHOTO_FILENAME = "face.jpg";
     private final RestTemplate vezhaApi;
     private final VezhaApiProps vezhaApiProps;
     private final RestTemplateBuilder restTemplateBuilder;
@@ -360,6 +363,40 @@ public class FaceApiRepository {
                 null,
                 ListConfigDto.class);
         return resp.getBody();
+    }
+
+    public boolean isFaceUniqueInLists(byte[] faceImage, Integer confidence) {
+        if (faceImage == null || faceImage.length == 0) {
+            return false;
+        }
+
+        String url = buildApiUrl("/face/list_items/search_by_photo", b -> b
+                .queryParam("confidence", confidence == null ? DEFAULT_SEARCH_BY_PHOTO_CONFIDENCE : confidence));
+
+        MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
+        body.add("image", new ByteArrayResource(faceImage) {
+            @Override
+            public String getFilename() {
+                return SEARCH_BY_PHOTO_FILENAME;
+            }
+        });
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.MULTIPART_FORM_DATA);
+        headers.setAccept(List.of(MediaType.APPLICATION_JSON, MediaType.TEXT_PLAIN, MediaType.ALL));
+
+        try {
+            ResponseEntity<String> resp = vezhaApi.exchange(
+                    url,
+                    HttpMethod.POST,
+                    new HttpEntity<>(body, headers),
+                    String.class);
+            String payload = Optional.ofNullable(resp.getBody()).orElse("").trim();
+            return payload.length() <= 2;
+        } catch (Exception e) {
+            log.error("[SEARCH BY PHOTO]", e);
+            return false;
+        }
     }
 
 
