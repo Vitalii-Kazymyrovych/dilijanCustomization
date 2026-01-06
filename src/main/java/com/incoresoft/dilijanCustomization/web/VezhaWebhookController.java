@@ -26,7 +26,6 @@ public class VezhaWebhookController {
             @RequestParam(required = false) Map<String, String> params,
             @RequestHeader(required = false) MultiValueMap<String, String> headers
     ) {
-        System.out.println("=== /face-event/add RAW ===\n" + raw + "\n=== END RAW ===");
         try {
             FaceEventDto event = objectMapper.readValue(raw, FaceEventDto.class);
             Optional<ListItemDto> res = service.handleEventAddIfUnknown(event);
@@ -43,7 +42,6 @@ public class VezhaWebhookController {
             @RequestParam(required = false) Map<String, String> params,
             @RequestHeader(required = false) MultiValueMap<String, String> headers
     ) {
-        System.out.println("=== /face-event/remove RAW ===\n" + raw + "\n=== END RAW ===");
         try {
             FaceEventDto event = objectMapper.readValue(raw, FaceEventDto.class);
             boolean removed = service.handleEventRemoveIfUnknown(event);
