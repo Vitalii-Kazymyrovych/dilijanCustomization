@@ -393,8 +393,19 @@ public class FaceApiRepository {
                     String.class);
             String payload = Optional.ofNullable(resp.getBody()).orElse("").trim();
             return payload.length() <= 2;
+        } catch (HttpStatusCodeException e) {
+            String responseText = Optional.ofNullable(e.getResponseBodyAsString()).orElse("").trim();
+            String message = String.format(
+                    "%d %s on %s request for \"%s\": \"%s\"",
+                    e.getStatusCode().value(),
+                    e.getStatusText(),
+                    HttpMethod.POST,
+                    url,
+                    responseText);
+            log.error("[SEARCH BY PHOTO] {}", message);
+            return false;
         } catch (Exception e) {
-            log.error("[SEARCH BY PHOTO]", e);
+            log.error("[SEARCH BY PHOTO] {}", e.getMessage());
             return false;
         }
     }
