@@ -8,6 +8,11 @@ import com.incoresoft.dilijanCustomization.domain.shared.dto.FaceListsResponse;
 import com.incoresoft.dilijanCustomization.repository.FaceApiRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
@@ -65,6 +70,9 @@ public class TelegramBot extends TelegramLongPollingBot {
     private static final ZoneId KYIV_TZ = ZoneId.of("Asia/Yerevan");
     private static final DateTimeFormatter MM_DD_YYYY =
             DateTimeFormatter.ofPattern("MM/dd/uuuu").withResolverStyle(ResolverStyle.STRICT);
+    // Column indexes in the evacuation workbook exported by ReportService
+    private static final int REPORT_COL_STATUS = 0;
+    private static final int REPORT_COL_ID = 3;
 
     @Override
     public void onUpdateReceived(Update update) {
@@ -348,7 +356,7 @@ public class TelegramBot extends TelegramLongPollingBot {
             java.io.File tmp = downloadFile(tgFile);
             int updatesCount = 0;
             try (java.io.FileInputStream fis = new java.io.FileInputStream(tmp)) {
-                org.apache.poi.ss.usermodel.Workbook wb = org.apache.poi.ss.usermodel.WorkbookFactory.create(fis);
+                Workbook wb = WorkbookFactory.create(fis);
                 // Соотнесение названий листов и ID списков (по sanitize)
                 Map<String, Long> nameToId = new HashMap<>();
                 var listsResponse = faceApiRepository.getFaceLists(200);
@@ -357,55 +365,11 @@ public class TelegramBot extends TelegramLongPollingBot {
                     String sheetName = sanitizeSheetName(list.getName() != null ? list.getName() : ("List_" + list.getId()));
                     nameToId.put(sheetName, list.getId());
                 }
-                for (int s = 0; s < wb.getNumberOfSheets(); s++) {
-                    org.apache.poi.ss.usermodel.Sheet sheet = wb.getSheetAt(s);
-                    String sheetName = sheet.getSheetName();
-                    Long listId = nameToId.get(sheetName);
-                    if (listId == null) continue;
-                    int last = sheet.getLastRowNum();
-                    for (int r = 1; r <= last; r++) {
-                        org.apache.poi.ss.usermodel.Row row = sheet.getRow(r);
-                        if (row == null) continue;
-                        // колонка 0: Status
-                        org.apache.poi.ss.usermodel.Cell statusCell = row.getCell(0);
-                        if (statusCell == null) continue;
-                        String statusRaw;
-                        switch (statusCell.getCellType()) {
-                            case STRING -> statusRaw = statusCell.getStringCellValue();
-                            case BOOLEAN -> statusRaw = statusCell.getBooleanCellValue() ? "On site" : "Evacuated";
-                            case NUMERIC -> statusRaw = String.valueOf(statusCell.getNumericCellValue());
-                            default -> statusRaw = statusCell.toString();
-                        }
-                        boolean status = !"Evacuated".equalsIgnoreCase(statusRaw != null ? statusRaw.trim() : "");
-                        // колонка 2: ID
-                        org.apache.poi.ss.usermodel.Cell idCell = row.getCell(2);
-                        if (idCell == null) continue;
-                        Long listItemId = null;
-                        switch (idCell.getCellType()) {
-                            case NUMERIC -> listItemId = (long) idCell.getNumericCellValue();
-                            case STRING -> {
-                                String val = idCell.getStringCellValue();
-                                if (val != null && !val.isBlank()) {
-                                    try {
-                                        listItemId = Long.parseLong(val.trim());
-                                    } catch (NumberFormatException ignored) {}
-                                }
-                            }
-                            default -> {
-                                String val = idCell.toString();
-                                if (val != null && !val.isBlank()) {
-                                    try {
-                                        listItemId = Long.parseLong(val.trim());
-                                    } catch (NumberFormatException ignored) {}
-                                }
-                            }
-                        }
-                        if (listItemId != null) {
-                            evacuationStatusService.updateStatus(listId, listItemId, status);
-                            updatesCount++;
-                        }
-                    }
+                List<EvacuationUpdate> updates = extractUpdatesFromWorkbook(wb, nameToId);
+                for (EvacuationUpdate upd : updates) {
+                    evacuationStatusService.updateStatus(upd.listId(), upd.listItemId(), upd.status());
                 }
+                updatesCount = updates.size();
             } finally {
                 if (tmp != null && tmp.exists()) tmp.delete();
             }
@@ -436,6 +400,71 @@ public class TelegramBot extends TelegramLongPollingBot {
             return null;
         }
     }
+
+    /**
+     * Extract updates from the uploaded evacuation workbook. The workbook layout must match
+     * {@link com.incoresoft.dilijanCustomization.domain.shared.service.ReportService#exportEvacuationWorkbook},
+     * where the list item ID is stored in column 3.
+     */
+    static List<EvacuationUpdate> extractUpdatesFromWorkbook(Workbook wb, Map<String, Long> nameToId) {
+        List<EvacuationUpdate> updates = new ArrayList<>();
+        if (wb == null || nameToId == null || nameToId.isEmpty()) {
+            return updates;
+        }
+
+        for (int s = 0; s < wb.getNumberOfSheets(); s++) {
+            Sheet sheet = wb.getSheetAt(s);
+            Long listId = nameToId.get(sheet.getSheetName());
+            if (listId == null) continue;
+
+            int last = sheet.getLastRowNum();
+            for (int r = 1; r <= last; r++) {
+                Row row = sheet.getRow(r);
+                if (row == null) continue;
+
+                Boolean status = parseStatus(row.getCell(REPORT_COL_STATUS));
+                Long listItemId = parseListItemId(row.getCell(REPORT_COL_ID));
+                if (status != null && listItemId != null) {
+                    updates.add(new EvacuationUpdate(listId, listItemId, status));
+                }
+            }
+        }
+        return updates;
+    }
+
+    private static Boolean parseStatus(Cell statusCell) {
+        if (statusCell == null) return null;
+        String statusRaw;
+        switch (statusCell.getCellType()) {
+            case STRING -> statusRaw = statusCell.getStringCellValue();
+            case BOOLEAN -> statusRaw = statusCell.getBooleanCellValue() ? "On site" : "Evacuated";
+            case NUMERIC -> statusRaw = String.valueOf(statusCell.getNumericCellValue());
+            default -> statusRaw = statusCell.toString();
+        }
+        return !"Evacuated".equalsIgnoreCase(statusRaw != null ? statusRaw.trim() : "");
+    }
+
+    private static Long parseListItemId(Cell idCell) {
+        if (idCell == null) return null;
+        return switch (idCell.getCellType()) {
+            case NUMERIC -> (long) idCell.getNumericCellValue();
+            case STRING -> parseLong(idCell.getStringCellValue());
+            default -> parseLong(idCell.toString());
+        };
+    }
+
+    private static Long parseLong(String val) {
+        if (val == null || val.isBlank()) {
+            return null;
+        }
+        try {
+            return Long.parseLong(val.trim());
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
+    }
+
+    record EvacuationUpdate(Long listId, Long listItemId, boolean status) {}
 
     @Override
     public String getBotUsername() { return botUsername; }
