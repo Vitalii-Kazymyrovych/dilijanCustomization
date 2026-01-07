@@ -42,7 +42,7 @@ import java.util.function.UnaryOperator;
 @RequiredArgsConstructor
 public class FaceApiRepository {
     private static final int MIN_DETECTION_SIMILARITY = 0;
-    private static final int DEFAULT_SEARCH_BY_PHOTO_CONFIDENCE = 90;
+    private static final int DEFAULT_SEARCH_BY_PHOTO_CONFIDENCE = 70;
     private static final String SEARCH_BY_PHOTO_FILENAME = "face.jpg";
     private final RestTemplate vezhaApi;
     private final VezhaApiProps vezhaApiProps;

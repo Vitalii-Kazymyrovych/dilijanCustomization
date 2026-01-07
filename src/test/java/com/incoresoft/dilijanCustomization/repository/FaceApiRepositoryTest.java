@@ -142,7 +142,7 @@ class FaceApiRepositoryTest {
 
         FaceApiRepository repo = new FaceApiRepository(restTemplate, props, builder);
 
-        server.expect(requestTo("http://example/api/face/list_items/search_by_photo?confidence=90"))
+        server.expect(requestTo("http://example/api/face/list_items/search_by_photo?confidence=70"))
                 .andExpect(method(HttpMethod.POST))
                 .andExpect(content().string(containsString("name=\"image\"")))
                 .andExpect(content().string(containsString("filename=\"face.jpg\"")))
@@ -164,7 +164,7 @@ class FaceApiRepositoryTest {
 
         FaceApiRepository repo = new FaceApiRepository(restTemplate, props, builder);
 
-        server.expect(requestTo("http://example/api/face/list_items/search_by_photo?confidence=90"))
+        server.expect(requestTo("http://example/api/face/list_items/search_by_photo?confidence=70"))
                 .andExpect(method(HttpMethod.POST))
                 .andRespond(withSuccess("[{\"id\":1}]", MediaType.APPLICATION_JSON));
 
