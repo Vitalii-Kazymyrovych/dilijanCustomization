@@ -32,7 +32,6 @@ evacuation:
   autostart: false
   lookbackDays: 14
   refreshMinutes: 5
-  listIds: [2]
 
 # ====== Unknown ======
 unknown:
