@@ -28,16 +28,20 @@ public class UnknownListInitializer {
     @Bean
     public ApplicationRunner ensureUnknownList() {
         return args -> {
-            var existing = faceApiRepository.findListByName(UNKNOWN_LIST_NAME);
-            long id;
-            if (existing.isPresent()) {
-                id = existing.get().getId();
-                log.info("Unknown list '{}' found with id={}", UNKNOWN_LIST_NAME, id);
-            } else {
-                id = faceApiRepository.createFaceList(UNKNOWN_LIST_NAME, UNKNOWN_LIST_COMMENT);
-                log.info("Unknown list '{}' created with id={}", UNKNOWN_LIST_NAME, id);
+            try {
+                var existing = faceApiRepository.findListByName(UNKNOWN_LIST_NAME);
+                long id;
+                if (existing.isPresent()) {
+                    id = existing.get().getId();
+                    log.info("Unknown list '{}' found with id={}", UNKNOWN_LIST_NAME, id);
+                } else {
+                    id = faceApiRepository.createFaceList(UNKNOWN_LIST_NAME, UNKNOWN_LIST_COMMENT);
+                    log.info("Unknown list '{}' created with id={}", UNKNOWN_LIST_NAME, id);
+                }
+                unknownListRegistry.set(id);
+            } catch (Exception ex) {
+                log.warn("Unknown list init failed; skipping startup creation: {}", ex.getMessage(), ex);
             }
-            unknownListRegistry.set(id);
         };
     }
 }

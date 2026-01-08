@@ -114,8 +114,8 @@ public class EvacuationStatusService {
                     .stream()
                     .collect(Collectors.toMap(EvacuationStatus::getListItemId, it -> it, (a, b) -> a, LinkedHashMap::new));
         } catch (Exception e) {
-            log.warn("Query failed: {}; returning empty map", e.getMessage());
-            return Collections.emptyMap();
+            log.error("Query failed: {}", e.getMessage(), e);
+            throw new IllegalStateException("Evacuation status query failed: " + e.getMessage(), e);
         }
     }
 

@@ -30,7 +30,10 @@ public class PostgresProps {
      * JDBC connection parameters (optional; reasonable defaults are applied).
      */
     private String host = "localhost";
-    private int port = 5432;
+    /**
+     * Port may be supplied as an arbitrary string in external configs; we parse it safely.
+     */
+    private String port = "5432";
     /** Dedicated JDBC user (optional). If empty, superuser/superpass are used. */
     private String username;
     /** Dedicated JDBC password (optional). If empty, superuser/superpass are used. */
@@ -43,6 +46,17 @@ public class PostgresProps {
     }
     public String jdbcUrl() {
         String db = (database == null || database.isBlank()) ? "postgres" : database;
-        return "jdbc:postgresql://" + host + ":" + port + "/" + db;
+        return "jdbc:postgresql://" + host + ":" + resolvePort() + "/" + db;
+    }
+
+    public int resolvePort() {
+        if (port == null || port.isBlank()) {
+            return 5432;
+        }
+        try {
+            return Integer.parseInt(port.trim());
+        } catch (NumberFormatException ex) {
+            return 5432;
+        }
     }
 }
