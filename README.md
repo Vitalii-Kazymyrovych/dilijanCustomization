@@ -13,6 +13,7 @@ This Spring Boot service glues the VEZHA face-recognition API, Telegram, and Exc
   - searches recent detections around a webhook event, downloads the detection thumbnail, probes `/face/list_items/search_by_photo` (multipart image, confidence=90) to ensure no similar faces already exist, and only then creates a list item;
   - deletes items when VEZHA signals removal;
   - performs weekly cleanup of the unknown list.
+  - Startup list initialization now logs and skips if VEZHA returns an invalid response (e.g., invalid Content-Type), preventing the application from failing on boot.
 - **Evacuation domain**: `EvacuationStatusService` periodically pulls detections for time-attendance-enabled lists, determines who last entered vs. exited, and persists statuses via `EvacuationStatusRepository` (PostgreSQL). `EvacuationReportService` refreshes statuses and assembles an XLSX workbook through `ReportService`, which embeds photos and dropdowns.
   - The evacuation status table now also stores the timestamp of the last entrance detection per person (`entrance_time`) so the report can display when each employee entered.
   - Evacuation status refresh paginates through all list items, so lists with more than 1000 people still update statuses correctly.
@@ -54,7 +55,7 @@ Configuration is loaded from `config/config.yaml` (not committed) with defaults 
 - `evacuation.*`: toggle/intervals for status refresh and report eligibility.
 - `vezha.cafe.*`: analytics ids, timezone, cron, excluded lists, and output directory for cafeteria XLSX.
 - `unknown.*`: whether to autostart unknown list creation/cleanup.
-- `postgres.*`: JDBC / psql settings for the evacuation status table.
+- `postgres.*`: JDBC / psql settings for the evacuation status table. Invalid or blank port values now fall back to `5432` so config typos do not break report generation.
 
 ## Package map
 - `web/` — REST controllers.
@@ -80,4 +81,5 @@ Configuration is loaded from `config/config.yaml` (not committed) with defaults 
 - Detection queries now send an empty multipart body (no `image` part) to mirror the browser request and avoid “image processing failed” responses when filtering by params.
 - VEZHA detection failures surface the HTTP status and response body in exceptions so logs capture upstream error details (e.g., image processing errors).
 - Expected failure paths (VEZHA detection errors, evacuation status queries) now log concise summaries at `WARN` without stack traces to keep test output clean while still surfacing the root cause.
+- Evacuation report generation now fails fast if the status query throws, instead of sending an empty workbook when the PostgreSQL connection is misconfigured.
 - Search-by-photo errors now log the HTTP status/response summary (without stack traces) so operators immediately see VEZHA’s reason, such as `ERROR_NO_FACES_DETECTED`.

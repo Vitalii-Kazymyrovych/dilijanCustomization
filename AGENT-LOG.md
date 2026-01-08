@@ -17,3 +17,5 @@
 - Tuned search-by-photo error logging to output the HTTP status/response summary instead of a full stack trace and documented the change in the README.
 - Softened logging on expected failure paths in `FaceApiRepository` and `EvacuationStatusService` so tests no longer emit stack traces while still surfacing the error summaries; recorded the quieter logging in the README.
 - Fixed Telegram evacuation workbook ingestion to read list item IDs from the correct column and covered the parser with a regression unit test.
+- Made PostgreSQL configuration parsing more tolerant (safe port fallback) and ensured evacuation report generation fails fast when status queries fail to avoid empty reports; updated README.
+- Guarded unknown list startup initialization so VEZHA content-type errors no longer crash the application; documented the behavior in README.
