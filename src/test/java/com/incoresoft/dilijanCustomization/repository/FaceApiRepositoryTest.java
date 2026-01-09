@@ -49,14 +49,16 @@ class FaceApiRepositoryTest {
 
         DetectionsResponse page1 = new DetectionsResponse();
         page1.setData(List.of(d1));
-        page1.setTotal(2);
-        page1.setPages(2);
+        page1.setTotal(1);
+        page1.setPages(1);
         DetectionsResponse page2 = new DetectionsResponse();
         page2.setData(List.of(d2));
-        page2.setTotal(2);
-        page2.setPages(2);
+        page2.setTotal(1);
+        page2.setPages(1);
+        DetectionsResponse page3 = new DetectionsResponse();
+        page3.setData(List.of());
 
-        doReturn(page1, page2).when(repo)
+        doReturn(page1, page2, page3).when(repo)
                 .getDetectionsFiltered(any(), anyList(), any(), any(), anyInt(), anyInt(), anyString());
 
         List<DetectionDto> all = repo.getAllDetectionsInWindow(5L, List.of(1L), 0L, 100L, 1);
