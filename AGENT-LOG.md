@@ -19,3 +19,5 @@
 - Fixed Telegram evacuation workbook ingestion to read list item IDs from the correct column and covered the parser with a regression unit test.
 - Made PostgreSQL configuration parsing more tolerant (safe port fallback) and ensured evacuation report generation fails fast when status queries fail to avoid empty reports; updated README.
 - Guarded unknown list startup initialization so VEZHA content-type errors no longer crash the application; documented the behavior in README.
+
+- Fixed `FaceApiRepository#getAllDetectionsInWindow` to paginate until an empty/partial page regardless of VEZHA total/pages metadata, updated its unit test, and refreshed README guidance.
