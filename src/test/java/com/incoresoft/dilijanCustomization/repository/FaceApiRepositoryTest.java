@@ -100,6 +100,10 @@ class FaceApiRepositoryTest {
                 .andExpect(method(HttpMethod.POST))
                 .andExpect(content().string(not(containsString("name=\"image\""))))
                 .andRespond(withSuccess("{\"data\":[{\"id\":1,\"timestamp\":5}],\"total\":1,\"pages\":1,\"status\":\"ok\"}", MediaType.APPLICATION_JSON));
+        server.expect(requestTo("http://example/api/face/detections?min_age=0&max_age=100&min_list_item_similarity=0&max_list_item_similarity=100&offset=1&limit=1&sort_order=asc"))
+                .andExpect(method(HttpMethod.POST))
+                .andExpect(content().string(not(containsString("name=\"image\""))))
+                .andRespond(withSuccess("{\"data\":[],\"total\":1,\"pages\":1,\"status\":\"ok\"}", MediaType.APPLICATION_JSON));
 
         List<DetectionDto> all = repo.getAllDetectionsInWindow(null, null, null, null, 1);
         assertThat(all).hasSize(1);

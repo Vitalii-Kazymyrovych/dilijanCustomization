@@ -21,3 +21,4 @@
 - Guarded unknown list startup initialization so VEZHA content-type errors no longer crash the application; documented the behavior in README.
 
 - Fixed `FaceApiRepository#getAllDetectionsInWindow` to paginate until an empty/partial page regardless of VEZHA total/pages metadata, updated its unit test, and refreshed README guidance.
+- Updated detection pagination test to expect the follow-up empty page request and noted the pagination test behavior in README.
