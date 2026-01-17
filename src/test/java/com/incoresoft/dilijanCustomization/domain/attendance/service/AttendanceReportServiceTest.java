@@ -46,11 +46,15 @@ class AttendanceReportServiceTest {
         DetectionDto det1 = new DetectionDto();
         det1.setListItem(new ListItemDto());
         det1.getListItem().setId(100L);
+        det1.getListItem().setListId(1L);
         DetectionDto det2 = new DetectionDto();
         det2.setListItem(new ListItemDto());
         det2.getListItem().setId(101L);
-        when(repo.getAllDetectionsInWindow(eq(1L), anyList(), anyLong(), anyLong(), anyInt()))
-                .thenReturn(List.of(det1, det2));
+        det2.getListItem().setListId(1L);
+        DetectionDto det3 = new DetectionDto();
+        det3.setId(999L);
+        when(repo.getAllDetectionsInWindow(isNull(), anyList(), anyLong(), anyLong(), anyInt()))
+                .thenReturn(List.of(det1, det2, det3));
 
         File generated = new File(outDir, "alpha.xlsx");
         when(reportService.exportCafeteriaPivot(any(), anyString(), anyList(), any())).thenReturn(generated);
@@ -65,12 +69,18 @@ class AttendanceReportServiceTest {
                 rowsCaptor.capture(), any(File.class));
 
         List<CafeteriaPivotRow> rows = rowsCaptor.getValue();
-        assertThat(rows).hasSize(1);
+        assertThat(rows).hasSize(2);
         CafeteriaPivotRow row = rows.get(0);
         assertThat(row.category()).isEqualTo("Alpha");
         assertThat(row.breakfast()).isEqualTo(2);
         assertThat(row.lunch()).isEqualTo(2);
         assertThat(row.dinner()).isEqualTo(2);
         assertThat(row.total()).isEqualTo(6);
+        CafeteriaPivotRow offListRow = rows.get(1);
+        assertThat(offListRow.category()).isEqualTo("Off the list");
+        assertThat(offListRow.breakfast()).isEqualTo(1);
+        assertThat(offListRow.lunch()).isEqualTo(1);
+        assertThat(offListRow.dinner()).isEqualTo(1);
+        assertThat(offListRow.total()).isEqualTo(3);
     }
 }

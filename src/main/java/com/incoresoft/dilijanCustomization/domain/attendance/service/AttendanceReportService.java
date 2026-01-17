@@ -25,7 +25,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Locale;
-import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -37,6 +36,7 @@ public class AttendanceReportService {
     private static final int DEFAULT_FACE_LIST_LIMIT = 200;
     private static final int DETECTION_PAGE_LIMIT = 500;
     private static final String DEFAULT_SHEET_NAME = "Cafeteria";
+    private static final String OFF_LIST_LABEL = "Off the list";
 
     private final CafeteriaProps cafe;
     private final FaceApiRepository repo;
@@ -63,14 +63,23 @@ public class AttendanceReportService {
         Map<Long, String> listIdToName = fetchListNames();
         List<Long> targetListIds = resolveTargetListIds(onlyListIds, listIdToName);
 
-        Map<Long, Set<Long>> breakfastCounts =
+        MealCounts breakfastCounts =
                 queryUniqueListItemIds(mealWindows.breakfastStart(), mealWindows.breakfastEnd(), targetListIds);
-        Map<Long, Set<Long>> lunchCounts =
+        MealCounts lunchCounts =
                 queryUniqueListItemIds(mealWindows.lunchStart(), mealWindows.lunchEnd(), targetListIds);
-        Map<Long, Set<Long>> dinnerCounts =
+        MealCounts dinnerCounts =
                 queryUniqueListItemIds(mealWindows.dinnerStart(), mealWindows.dinnerEnd(), targetListIds);
 
-        List<CafeteriaPivotRow> rows = buildPivotRows(listIdToName, targetListIds, breakfastCounts, lunchCounts, dinnerCounts);
+        List<CafeteriaPivotRow> rows = buildPivotRows(
+                listIdToName,
+                targetListIds,
+                breakfastCounts.byList(),
+                lunchCounts.byList(),
+                dinnerCounts.byList(),
+                breakfastCounts.offListIds().size(),
+                lunchCounts.offListIds().size(),
+                dinnerCounts.offListIds().size()
+        );
         File outputFile = prepareOutputFile(date);
         File result = reportService.exportCafeteriaPivot(date, DEFAULT_SHEET_NAME, rows, outputFile);
         log.info("Cafeteria report generated (tz={}): {}", zone, result.getAbsolutePath());
@@ -78,29 +87,49 @@ public class AttendanceReportService {
     }
 
     /** DEDUP: per list, unique list_item.id within the given time window */
-    private Map<Long, Set<Long>> queryUniqueListItemIds(long startMillis, long endMillis, List<Long> listIds) {
+    private MealCounts queryUniqueListItemIds(long startMillis, long endMillis, List<Long> listIds) {
         Map<Long, Set<Long>> uniquesByList = new HashMap<>();
-        for (Long listId : listIds) {
-            List<DetectionDto> dets = repo.getAllDetectionsInWindow(
-                    listId,
-                    cafe.getAnalyticsIds(),
-                    startMillis,
-                    endMillis,
-                    DETECTION_PAGE_LIMIT
-            );
-            Set<Long> uniqueIds = uniquesByList.computeIfAbsent(listId, k -> new HashSet<>());
-            collectUniqueListItemIds(dets, uniqueIds);
-        }
+        Set<String> offListIds = new HashSet<>();
+        Set<Long> targetListIds = new HashSet<>(listIds);
+
+        List<DetectionDto> dets = repo.getAllDetectionsInWindow(
+                null,
+                cafe.getAnalyticsIds(),
+                startMillis,
+                endMillis,
+                DETECTION_PAGE_LIMIT
+        );
+        collectUniqueListItemIds(dets, targetListIds, uniquesByList, offListIds);
+
         // Ensure empty sets for lists without detections (visible zeros)
         for (Long id : listIds) uniquesByList.computeIfAbsent(id, k -> new HashSet<>());
-        return uniquesByList;
+        return new MealCounts(uniquesByList, offListIds);
     }
 
-    private void collectUniqueListItemIds(List<DetectionDto> detections, Set<Long> uniqueIds) {
+    private void collectUniqueListItemIds(List<DetectionDto> detections,
+                                          Set<Long> targetListIds,
+                                          Map<Long, Set<Long>> uniquesByList,
+                                          Set<String> offListIds) {
         detections.stream()
-                .map(d -> d.getListItem() != null ? d.getListItem().getId() : null)
-                .filter(Objects::nonNull)
-                .forEach(uniqueIds::add);
+                .forEach(detection -> {
+                    if (detection == null) return;
+                    if (detection.getListItem() == null
+                            || detection.getListItem().getId() == null
+                            || detection.getListItem().getListId() == null) {
+                        String fallbackKey = detection.getId() != null
+                                ? detection.getId().toString()
+                                : String.format("%s-%s-%s",
+                                    detection.getTimestamp(),
+                                    detection.getFaceImage(),
+                                    detection.getAnalytics() != null ? detection.getAnalytics().getId() : null);
+                        offListIds.add(fallbackKey);
+                        return;
+                    }
+                    if (!targetListIds.contains(detection.getListItem().getListId())) return;
+                    uniquesByList
+                            .computeIfAbsent(detection.getListItem().getListId(), k -> new HashSet<>())
+                            .add(detection.getListItem().getId());
+                });
     }
 
     private Map<Long, String> fetchListNames() {
@@ -141,7 +170,10 @@ public class AttendanceReportService {
                                                   List<Long> targetListIds,
                                                   Map<Long, Set<Long>> breakfastCounts,
                                                   Map<Long, Set<Long>> lunchCounts,
-                                                  Map<Long, Set<Long>> dinnerCounts) {
+                                                  Map<Long, Set<Long>> dinnerCounts,
+                                                  int offListBreakfast,
+                                                  int offListLunch,
+                                                  int offListDinner) {
         List<CafeteriaPivotRow> rows = new ArrayList<>();
         targetListIds.stream()
                 .sorted(Comparator.comparing(id -> listIdToName.getOrDefault(id, "").toLowerCase(Locale.ROOT)))
@@ -152,6 +184,7 @@ public class AttendanceReportService {
                     int dinner = sizeOf(dinnerCounts.get(id));
                     rows.add(new CafeteriaPivotRow(name, breakfast, lunch, dinner));
                 });
+        rows.add(new CafeteriaPivotRow(OFF_LIST_LABEL, offListBreakfast, offListLunch, offListDinner));
         return rows;
     }
 
@@ -185,5 +218,8 @@ public class AttendanceReportService {
     private record MealWindows(long breakfastStart, long breakfastEnd,
                                long lunchStart, long lunchEnd,
                                long dinnerStart, long dinnerEnd) {
+    }
+
+    private record MealCounts(Map<Long, Set<Long>> byList, Set<String> offListIds) {
     }
 }
