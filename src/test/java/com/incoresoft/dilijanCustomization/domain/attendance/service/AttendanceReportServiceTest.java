@@ -92,4 +92,46 @@ class AttendanceReportServiceTest {
         assertThat(offListRow.dinner()).isEqualTo(1);
         assertThat(offListRow.total()).isEqualTo(3);
     }
+
+    @Test
+    void buildsReportWithObservedListsWhenFaceListsUnavailable() throws Exception {
+        CafeteriaProps props = new CafeteriaProps();
+        props.setTimezone("UTC");
+        props.setAnalyticsIds(List.of(10L));
+        props.setExcludedListNames(Set.of());
+        File outDir = Files.createTempDirectory("cafe-out").toFile();
+        props.setOutputDir(outDir.getAbsolutePath());
+
+        FaceApiRepository repo = mock(FaceApiRepository.class);
+        ReportService reportService = mock(ReportService.class);
+
+        when(repo.getFaceLists(200)).thenReturn(null);
+
+        DetectionDto det1 = new DetectionDto();
+        det1.setListItem(new ListItemDto());
+        det1.getListItem().setId(100L);
+        det1.getListItem().setListId(1L);
+        DetectionDto det2 = new DetectionDto();
+        det2.setListItem(new ListItemDto());
+        det2.getListItem().setId(101L);
+        det2.getListItem().setListId(2L);
+        when(repo.getAllDetectionsInWindow(isNull(), anyList(), anyLong(), anyLong(), anyInt()))
+                .thenReturn(List.of(det1, det2));
+
+        File generated = new File(outDir, "alpha.xlsx");
+        when(reportService.exportCafeteriaPivot(any(), anyString(), anyList(), any())).thenReturn(generated);
+
+        AttendanceReportService service = new AttendanceReportService(props, repo, reportService);
+        File result = service.buildSingleDayReport(LocalDate.of(2024, 12, 1));
+
+        assertThat(result).isEqualTo(generated);
+
+        ArgumentCaptor<List<CafeteriaPivotRow>> rowsCaptor = ArgumentCaptor.forClass(List.class);
+        verify(reportService).exportCafeteriaPivot(eq(LocalDate.of(2024, 12, 1)), eq("Cafeteria"),
+                rowsCaptor.capture(), any(File.class));
+
+        List<CafeteriaPivotRow> rows = rowsCaptor.getValue();
+        assertThat(rows).extracting(CafeteriaPivotRow::category)
+                .containsExactly("list_1", "list_2", "Off the list");
+    }
 }

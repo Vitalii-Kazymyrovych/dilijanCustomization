@@ -25,3 +25,5 @@
 - Updated cafeteria attendance counting to group detections by list_id from a single window query, adjusted tests, and refreshed README.
 - Added an "Off the list" row to cafeteria attendance reports by counting detections without list item IDs, updated tests and README.
 - Adjusted cafeteria attendance pivot ordering to follow list_id after deduplication, updated tests and README.
+
+- Adjusted cafeteria attendance reporting to keep per-list rows even when face-list metadata is unavailable by allowing all observed list IDs and falling back to observed lists; added a unit test for the fallback behavior and updated README.

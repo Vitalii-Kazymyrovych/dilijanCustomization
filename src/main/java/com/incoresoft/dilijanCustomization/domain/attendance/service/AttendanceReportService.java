@@ -69,9 +69,13 @@ public class AttendanceReportService {
         MealCounts dinnerCounts =
                 queryUniqueListItemIds(mealWindows.dinnerStart(), mealWindows.dinnerEnd(), targetListIds);
 
+        List<Long> effectiveListIds = resolveEffectiveListIds(targetListIds,
+                breakfastCounts.byList(),
+                lunchCounts.byList(),
+                dinnerCounts.byList());
         List<CafeteriaPivotRow> rows = buildPivotRows(
                 listIdToName,
-                targetListIds,
+                effectiveListIds,
                 breakfastCounts.byList(),
                 lunchCounts.byList(),
                 dinnerCounts.byList(),
@@ -89,7 +93,8 @@ public class AttendanceReportService {
     private MealCounts queryUniqueListItemIds(long startMillis, long endMillis, List<Long> listIds) {
         Map<Long, Set<Long>> uniquesByList = new HashMap<>();
         Set<String> offListIds = new HashSet<>();
-        Set<Long> targetListIds = new HashSet<>(listIds);
+        Set<Long> targetListIds = listIds == null ? Set.of() : new HashSet<>(listIds);
+        boolean allowAllLists = targetListIds.isEmpty();
 
         List<DetectionDto> dets = repo.getAllDetectionsInWindow(
                 null,
@@ -98,15 +103,18 @@ public class AttendanceReportService {
                 endMillis,
                 DETECTION_PAGE_LIMIT
         );
-        collectUniqueListItemIds(dets, targetListIds, uniquesByList, offListIds);
+        collectUniqueListItemIds(dets, targetListIds, allowAllLists, uniquesByList, offListIds);
 
         // Ensure empty sets for lists without detections (visible zeros)
-        for (Long id : listIds) uniquesByList.computeIfAbsent(id, k -> new HashSet<>());
+        if (listIds != null) {
+            for (Long id : listIds) uniquesByList.computeIfAbsent(id, k -> new HashSet<>());
+        }
         return new MealCounts(uniquesByList, offListIds);
     }
 
     private void collectUniqueListItemIds(List<DetectionDto> detections,
                                           Set<Long> targetListIds,
+                                          boolean allowAllLists,
                                           Map<Long, Set<Long>> uniquesByList,
                                           Set<String> offListIds) {
         detections.stream()
@@ -124,7 +132,7 @@ public class AttendanceReportService {
                         offListIds.add(fallbackKey);
                         return;
                     }
-                    if (!targetListIds.contains(detection.getListItem().getListId())) return;
+                    if (!allowAllLists && !targetListIds.contains(detection.getListItem().getListId())) return;
                     uniquesByList
                             .computeIfAbsent(detection.getListItem().getListId(), k -> new HashSet<>())
                             .add(detection.getListItem().getId());
@@ -190,12 +198,36 @@ public class AttendanceReportService {
                 .map(AttendanceReportService::safeLower)
                 .collect(Collectors.toSet());
 
+        if (onlyListIds != null && !onlyListIds.isEmpty()) {
+            return onlyListIds.stream()
+                    .filter(id -> {
+                        String name = listIdToName.get(id);
+                        return name == null || !excludedNames.contains(safeLower(name));
+                    })
+                    .distinct()
+                    .sorted()
+                    .toList();
+        }
+
         return listIdToName.entrySet().stream()
-                .filter(e -> onlyListIds == null || onlyListIds.isEmpty() || onlyListIds.contains(e.getKey()))
                 .filter(e -> !excludedNames.contains(safeLower(e.getValue())))
                 .map(Map.Entry::getKey)
                 .sorted()
                 .toList();
+    }
+
+    private List<Long> resolveEffectiveListIds(List<Long> targetListIds,
+                                               Map<Long, Set<Long>> breakfastCounts,
+                                               Map<Long, Set<Long>> lunchCounts,
+                                               Map<Long, Set<Long>> dinnerCounts) {
+        if (targetListIds != null && !targetListIds.isEmpty()) {
+            return targetListIds;
+        }
+        Set<Long> observed = new HashSet<>();
+        observed.addAll(breakfastCounts.keySet());
+        observed.addAll(lunchCounts.keySet());
+        observed.addAll(dinnerCounts.keySet());
+        return observed.stream().sorted().toList();
     }
 
     private MealWindows buildMealWindows(LocalDate date, ZoneId zone) {
