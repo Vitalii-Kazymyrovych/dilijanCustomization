@@ -24,3 +24,4 @@
 - Updated detection pagination test to expect the follow-up empty page request and noted the pagination test behavior in README.
 - Updated cafeteria attendance counting to group detections by list_id from a single window query, adjusted tests, and refreshed README.
 - Added an "Off the list" row to cafeteria attendance reports by counting detections without list item IDs, updated tests and README.
+- Adjusted cafeteria attendance pivot ordering to follow list_id after deduplication, updated tests and README.

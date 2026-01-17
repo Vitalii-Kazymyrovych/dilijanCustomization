@@ -35,12 +35,15 @@ class AttendanceReportServiceTest {
 
         FaceListsResponse listsResponse = new FaceListsResponse();
         FaceListDto list1 = new FaceListDto();
-        list1.setId(1L);
-        list1.setName("Alpha");
+        list1.setId(2L);
+        list1.setName("Zulu");
         FaceListDto list2 = new FaceListDto();
-        list2.setId(2L);
-        list2.setName("Contractor");
-        listsResponse.setData(List.of(list1, list2));
+        list2.setId(1L);
+        list2.setName("Alpha");
+        FaceListDto list3 = new FaceListDto();
+        list3.setId(3L);
+        list3.setName("Contractor");
+        listsResponse.setData(List.of(list1, list2, list3));
         when(repo.getFaceLists(200)).thenReturn(listsResponse);
 
         DetectionDto det1 = new DetectionDto();
@@ -50,7 +53,7 @@ class AttendanceReportServiceTest {
         DetectionDto det2 = new DetectionDto();
         det2.setListItem(new ListItemDto());
         det2.getListItem().setId(101L);
-        det2.getListItem().setListId(1L);
+        det2.getListItem().setListId(2L);
         DetectionDto det3 = new DetectionDto();
         det3.setId(999L);
         when(repo.getAllDetectionsInWindow(isNull(), anyList(), anyLong(), anyLong(), anyInt()))
@@ -69,14 +72,20 @@ class AttendanceReportServiceTest {
                 rowsCaptor.capture(), any(File.class));
 
         List<CafeteriaPivotRow> rows = rowsCaptor.getValue();
-        assertThat(rows).hasSize(2);
+        assertThat(rows).hasSize(3);
         CafeteriaPivotRow row = rows.get(0);
         assertThat(row.category()).isEqualTo("Alpha");
-        assertThat(row.breakfast()).isEqualTo(2);
-        assertThat(row.lunch()).isEqualTo(2);
-        assertThat(row.dinner()).isEqualTo(2);
-        assertThat(row.total()).isEqualTo(6);
-        CafeteriaPivotRow offListRow = rows.get(1);
+        assertThat(row.breakfast()).isEqualTo(1);
+        assertThat(row.lunch()).isEqualTo(1);
+        assertThat(row.dinner()).isEqualTo(1);
+        assertThat(row.total()).isEqualTo(3);
+        CafeteriaPivotRow row2 = rows.get(1);
+        assertThat(row2.category()).isEqualTo("Zulu");
+        assertThat(row2.breakfast()).isEqualTo(1);
+        assertThat(row2.lunch()).isEqualTo(1);
+        assertThat(row2.dinner()).isEqualTo(1);
+        assertThat(row2.total()).isEqualTo(3);
+        CafeteriaPivotRow offListRow = rows.get(2);
         assertThat(offListRow.category()).isEqualTo("Off the list");
         assertThat(offListRow.breakfast()).isEqualTo(1);
         assertThat(offListRow.lunch()).isEqualTo(1);

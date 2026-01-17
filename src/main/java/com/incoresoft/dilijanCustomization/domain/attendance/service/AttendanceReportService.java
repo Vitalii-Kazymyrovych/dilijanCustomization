@@ -19,7 +19,6 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -175,9 +174,7 @@ public class AttendanceReportService {
                                                   int offListLunch,
                                                   int offListDinner) {
         List<CafeteriaPivotRow> rows = new ArrayList<>();
-        targetListIds.stream()
-                .sorted(Comparator.comparing(id -> listIdToName.getOrDefault(id, "").toLowerCase(Locale.ROOT)))
-                .forEach(id -> {
+        targetListIds.forEach(id -> {
                     String name = listIdToName.getOrDefault(id, "list_" + id);
                     int breakfast = sizeOf(breakfastCounts.get(id));
                     int lunch = sizeOf(lunchCounts.get(id));
