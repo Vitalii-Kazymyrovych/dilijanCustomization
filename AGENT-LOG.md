@@ -22,3 +22,4 @@
 
 - Fixed `FaceApiRepository#getAllDetectionsInWindow` to paginate until an empty/partial page regardless of VEZHA total/pages metadata, updated its unit test, and refreshed README guidance.
 - Updated detection pagination test to expect the follow-up empty page request and noted the pagination test behavior in README.
+- Rewrote the deprecated VEZHA customization spec to align with current implementation (evacuation, cafeteria attendance, unknown list flows) in TECHNICAL-SPEC.md and linked it from README.

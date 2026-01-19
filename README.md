@@ -2,6 +2,9 @@
 
 This Spring Boot service glues the VEZHA face-recognition API, Telegram, and Excel report generation for evacuation and cafeteria attendance workflows.
 
+## Technical specification
+See [TECHNICAL-SPEC.md](TECHNICAL-SPEC.md) for the aligned functional specification based on the current implementation.
+
 ## Architecture at a glance
 - **HTTP entrypoints**: REST controllers expose webhooks and reporting endpoints for VEZHA and operators.
   - `VezhaWebhookController` ingests VEZHA face events to add/remove unknown persons from the dedicated face list. It delegates to `UnknownPersonService` for the add/remove logic and detection lookups.  
