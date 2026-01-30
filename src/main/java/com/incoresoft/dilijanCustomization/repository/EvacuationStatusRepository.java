@@ -24,13 +24,23 @@ public interface EvacuationStatusRepository extends JpaRepository<EvacuationStat
     List<EvacuationStatus> findByListIdAndStatusTrue(Long listId);
 
     /**
+     * Retrieve all records for a given list.
+     *
+     * @param listId identifier of the face list
+     * @return list of evacuation records
+     */
+    List<EvacuationStatus> findByListId(Long listId);
+
+    /**
      * Update the status field for the given list and listItem combination.
      * This uses a JPQL update to modify only the status flag.
      */
     @Modifying
-    @Query("update EvacuationStatus e set e.status = :status, e.entranceTime = :entranceTime where e.listId = :listId and e.listItemId = :listItemId")
+    @Query("update EvacuationStatus e set e.status = :status, e.entranceTime = :entranceTime, e.exitTime = :exitTime, e.manuallyUpdated = :manuallyUpdated where e.listId = :listId and e.listItemId = :listItemId")
     void updateStatus(@Param("listId") Long listId,
                       @Param("listItemId") Long listItemId,
                       @Param("status") Boolean status,
-                      @Param("entranceTime") Long entranceTime);
+                      @Param("entranceTime") Long entranceTime,
+                      @Param("exitTime") Long exitTime,
+                      @Param("manuallyUpdated") Boolean manuallyUpdated);
 }

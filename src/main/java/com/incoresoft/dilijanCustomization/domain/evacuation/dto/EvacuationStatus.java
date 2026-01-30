@@ -41,4 +41,10 @@ public class EvacuationStatus {
     /** Timestamp (epoch millis) of the last entrance detection that marked the user on site. */
     @Column(name = "entrance_time")
     private Long entranceTime;
+    /** Timestamp (epoch millis) of the last exit detection that marked the user as evacuated. */
+    @Column(name = "exit_time")
+    private Long exitTime;
+    /** Flag indicating whether the status was manually adjusted via uploaded workbook. */
+    @Column(name = "manually_updated")
+    private Boolean manuallyUpdated;
 }
