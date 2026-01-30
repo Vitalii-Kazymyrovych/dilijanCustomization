@@ -434,14 +434,31 @@ public class TelegramBot extends TelegramLongPollingBot {
 
     private static Boolean parseStatus(Cell statusCell) {
         if (statusCell == null) return null;
-        String statusRaw;
-        switch (statusCell.getCellType()) {
-            case STRING -> statusRaw = statusCell.getStringCellValue();
-            case BOOLEAN -> statusRaw = statusCell.getBooleanCellValue() ? "On site" : "Evacuated";
-            case NUMERIC -> statusRaw = String.valueOf(statusCell.getNumericCellValue());
-            default -> statusRaw = statusCell.toString();
+        return switch (statusCell.getCellType()) {
+            case BOOLEAN -> statusCell.getBooleanCellValue();
+            case NUMERIC -> statusCell.getNumericCellValue() != 0;
+            case STRING -> parseStatusString(statusCell.getStringCellValue());
+            default -> parseStatusString(statusCell.toString());
+        };
+    }
+
+    private static Boolean parseStatusString(String statusRaw) {
+        if (statusRaw == null) {
+            return null;
         }
-        return !"Evacuated".equalsIgnoreCase(statusRaw != null ? statusRaw.trim() : "");
+        String trimmed = statusRaw.trim();
+        if (trimmed.isEmpty()) {
+            return null;
+        }
+        if ("Evacuated".equalsIgnoreCase(trimmed) || "false".equalsIgnoreCase(trimmed) || "0".equals(trimmed)
+                || "☐".equals(trimmed)) {
+            return false;
+        }
+        if ("On site".equalsIgnoreCase(trimmed) || "true".equalsIgnoreCase(trimmed) || "1".equals(trimmed)
+                || "☑".equals(trimmed)) {
+            return true;
+        }
+        return true;
     }
 
     private static Long parseListItemId(Cell idCell) {

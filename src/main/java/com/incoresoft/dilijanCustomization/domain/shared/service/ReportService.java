@@ -35,7 +35,9 @@ public class ReportService {
     private static final int COL_WIDTH_COMMENT = 50 * 256;
     /** Width of the ID column in characters (scaled by 256 for POI). */
     private static final int COL_WIDTH_ID      = 20 * 256;
-    private static final String[] EVAC_OPTIONS = {"On site", "Evacuated"};
+    private static final String CHECKBOX_CHECKED = "☑";
+    private static final String CHECKBOX_UNCHECKED = "☐";
+    private static final String[] EVAC_CHECKBOX_OPTIONS = {CHECKBOX_CHECKED, CHECKBOX_UNCHECKED};
     private static final List<String> COLUMNS = List.of("Category", "Breakfast", "Lunch", "Dinner", "Total");
 
     private final FaceApiRepository repo;
@@ -143,9 +145,9 @@ public class ReportService {
                     ListItemDto item = rowData.item();
                     Row row = sh.createRow(r);
 
-                    // Status drop-down with default "On site"
+                    // Status checkbox with default "On site"
                     Cell statusCell = row.createCell(0);
-                    statusCell.setCellValue("On site");
+                    statusCell.setCellValue(CHECKBOX_CHECKED);
                     statusCell.setCellStyle(checkboxColumnStyle(wb));
 
                     // Entrance time
@@ -188,13 +190,13 @@ public class ReportService {
                     r++;
                 }
 
-                // Drop-down on Status column for data rows
+                // Checkbox-style validation on Status column for data rows
                 DataValidationHelper dvHelper = sh.getDataValidationHelper();
-                DataValidationConstraint dvConstraint = dvHelper.createExplicitListConstraint(EVAC_OPTIONS);
+                DataValidationConstraint dvConstraint = dvHelper.createExplicitListConstraint(EVAC_CHECKBOX_OPTIONS);
                 CellRangeAddressList addressList =
                         new CellRangeAddressList(1, Math.max(1, sh.getLastRowNum()), 0, 0);
                 DataValidation validation = dvHelper.createValidation(dvConstraint, addressList);
-                validation.setSuppressDropDownArrow(false);
+                validation.setSuppressDropDownArrow(true);
                 validation.setEmptyCellAllowed(true);
                 validation.setShowErrorBox(true);
                 sh.addValidationData(validation);
@@ -240,6 +242,10 @@ public class ReportService {
         CellStyle cs = wb.createCellStyle();
         cs.setAlignment(HorizontalAlignment.CENTER);
         cs.setVerticalAlignment(VerticalAlignment.CENTER);
+        Font font = wb.createFont();
+        font.setFontName("Segoe UI Symbol");
+        font.setFontHeightInPoints((short) 14);
+        cs.setFont(font);
         return cs;
     }
 
