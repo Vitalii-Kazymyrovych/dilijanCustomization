@@ -145,9 +145,9 @@ public class ReportService {
                     ListItemDto item = rowData.item();
                     Row row = sh.createRow(r);
 
-                    // Status checkbox (default unchecked)
+                    // Status checkbox (default checked)
                     Cell statusCell = row.createCell(0);
-                    statusCell.setCellValue(CHECKBOX_UNCHECKED);
+                    statusCell.setCellValue(CHECKBOX_CHECKED);
                     statusCell.setCellStyle(checkboxColumnStyle(wb));
 
                     // Entrance time
