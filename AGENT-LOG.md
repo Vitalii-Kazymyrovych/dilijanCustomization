@@ -24,3 +24,4 @@
 - Updated detection pagination test to expect the follow-up empty page request and noted the pagination test behavior in README.
 - Rewrote the deprecated VEZHA customization spec to align with current implementation (evacuation, cafeteria attendance, unknown list flows) in TECHNICAL-SPEC.md and linked it from README.
 - Replaced evacuation report status dropdowns with checkbox-style symbols in the XLSX, updated Telegram parsing/tests for checkbox values, and refreshed README notes.
+- Added manual evacuation override tracking with exit-time and manual-update flags, adjusted scheduled refresh to respect manual overrides, updated evacuation report checkbox default, refreshed tests, and documented the changes.

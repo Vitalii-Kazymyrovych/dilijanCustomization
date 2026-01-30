@@ -142,23 +142,27 @@ public class EvacuationStatusService {
             return;
         }
 
-        List<EvacuationStatus> statuses = buildStatuses(faceList, attendanceConfig, latestByPerson, listItems);
+        Map<Long, EvacuationStatus> existing = fetchExistingStatuses(faceList.getId());
+        List<EvacuationStatus> statuses = buildStatuses(faceList, attendanceConfig, latestByPerson, listItems, existing);
         evacuationStatusRepository.saveAll(statuses);
     }
 
     /** Обновление статуса одного пользователя в списке. */
     @Transactional
     public void updateStatus(Long listId, Long listItemId, boolean status) {
-        updateStatus(listId, listItemId, status, status ? System.currentTimeMillis() : null);
+        Long now = System.currentTimeMillis();
+        Long entranceTime = status ? now : null;
+        Long exitTime = status ? null : now;
+        updateStatus(listId, listItemId, status, entranceTime, exitTime, true);
     }
 
     /**
      * Update status and entrance time for a single list item. If the record does not yet exist,
      * it will be inserted.
      */
-    public void updateStatus(Long listId, Long listItemId, boolean status, Long entranceTime) {
+    public void updateStatus(Long listId, Long listItemId, boolean status, Long entranceTime, Long exitTime, boolean manuallyUpdated) {
         try {
-            evacuationStatusRepository.updateStatus(listId, listItemId, status, entranceTime);
+            evacuationStatusRepository.updateStatus(listId, listItemId, status, entranceTime, exitTime, manuallyUpdated);
             // если записи нет, сохранить новую
             if (!evacuationStatusRepository.existsById(new EvacuationStatusPK(listId, listItemId))) {
                 EvacuationStatus es = new EvacuationStatus();
@@ -166,6 +170,8 @@ public class EvacuationStatusService {
                 es.setListItemId(listItemId);
                 es.setStatus(status);
                 es.setEntranceTime(entranceTime);
+                es.setExitTime(exitTime);
+                es.setManuallyUpdated(manuallyUpdated);
                 evacuationStatusRepository.save(es);
             }
         } catch (Exception ex) {
@@ -206,10 +212,14 @@ public class EvacuationStatusService {
                 "exit_stream_ids INT[], ",
                 "status BOOLEAN, ",
                 "entrance_time BIGINT, ",
+                "exit_time BIGINT, ",
+                "manually_updated BOOLEAN, ",
                 "PRIMARY KEY (list_id, list_item_id)",
                 ")");
         runPsql(dbName, createTable);
         runPsql(dbName, "ALTER TABLE IF EXISTS evacuation ADD COLUMN IF NOT EXISTS entrance_time BIGINT");
+        runPsql(dbName, "ALTER TABLE IF EXISTS evacuation ADD COLUMN IF NOT EXISTS exit_time BIGINT");
+        runPsql(dbName, "ALTER TABLE IF EXISTS evacuation ADD COLUMN IF NOT EXISTS manually_updated BOOLEAN");
     }
 
     private void runPsql(String db, String sql) throws Exception {
@@ -289,6 +299,33 @@ public class EvacuationStatusService {
         return latest;
     }
 
+    private Map<Long, EvacuationStatus> fetchExistingStatuses(Long listId) {
+        try {
+            return evacuationStatusRepository.findByListId(listId)
+                    .stream()
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toMap(EvacuationStatus::getListItemId, it -> it, (a, b) -> a));
+        } catch (Exception e) {
+            log.warn("[EVAC] Failed to load existing statuses for list {}: {}", listId, e.getMessage());
+            return Map.of();
+        }
+    }
+
+    private Long resolveLastEventTime(EvacuationStatus status) {
+        if (status == null) {
+            return null;
+        }
+        Long entrance = status.getEntranceTime();
+        Long exit = status.getExitTime();
+        if (entrance == null) {
+            return exit;
+        }
+        if (exit == null) {
+            return entrance;
+        }
+        return Math.max(entrance, exit);
+    }
+
     private boolean isLater(DetectionDto candidate, DetectionDto existing) {
         return candidate.getTimestamp() != null
                 && (existing.getTimestamp() == null || candidate.getTimestamp() > existing.getTimestamp());
@@ -297,10 +334,23 @@ public class EvacuationStatusService {
     private List<EvacuationStatus> buildStatuses(FaceListDto faceList,
                                                  TimeAttendanceConfig attendanceConfig,
                                                  Map<Long, DetectionDto> latestByPerson,
-                                                 List<ListItemDto> listItems) {
+                                                 List<ListItemDto> listItems,
+                                                 Map<Long, EvacuationStatus> existingStatuses) {
         List<EvacuationStatus> statuses = new ArrayList<>();
         for (ListItemDto item : listItems) {
             DetectionDto detection = latestByPerson.get(item.getId());
+            EvacuationStatus existing = existingStatuses.get(item.getId());
+            Long latestEventTime = detection != null ? detection.getTimestamp() : null;
+            Long existingEventTime = resolveLastEventTime(existing);
+            if (existing != null && Boolean.TRUE.equals(existing.getManuallyUpdated())) {
+                if (latestEventTime == null || (existingEventTime != null && latestEventTime <= existingEventTime)) {
+                    existing.setEnterStreamIds(attendanceConfig.entranceArray());
+                    existing.setExitStreamIds(attendanceConfig.exitArray());
+                    statuses.add(existing);
+                    continue;
+                }
+            }
+
             boolean status = detection != null && isEntranceDetection(detection, attendanceConfig.entrance());
 
             EvacuationStatus evacuationStatus = new EvacuationStatus();
@@ -310,6 +360,8 @@ public class EvacuationStatusService {
             evacuationStatus.setExitStreamIds(attendanceConfig.exitArray());
             evacuationStatus.setStatus(status);
             evacuationStatus.setEntranceTime(status && detection != null ? detection.getTimestamp() : null);
+            evacuationStatus.setExitTime(!status && detection != null ? detection.getTimestamp() : null);
+            evacuationStatus.setManuallyUpdated(false);
             statuses.add(evacuationStatus);
         }
         return statuses;
