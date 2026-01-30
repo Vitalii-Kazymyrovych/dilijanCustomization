@@ -17,7 +17,7 @@ See [TECHNICAL-SPEC.md](TECHNICAL-SPEC.md) for the aligned functional specificat
   - deletes items when VEZHA signals removal;
   - performs weekly cleanup of the unknown list.
   - Startup list initialization now logs and skips if VEZHA returns an invalid response (e.g., invalid Content-Type), preventing the application from failing on boot.
-- **Evacuation domain**: `EvacuationStatusService` periodically pulls detections for time-attendance-enabled lists, determines who last entered vs. exited, and persists statuses via `EvacuationStatusRepository` (PostgreSQL). `EvacuationReportService` refreshes statuses and assembles an XLSX workbook through `ReportService`, which embeds photos and dropdowns.
+- **Evacuation domain**: `EvacuationStatusService` periodically pulls detections for time-attendance-enabled lists, determines who last entered vs. exited, and persists statuses via `EvacuationStatusRepository` (PostgreSQL). `EvacuationReportService` refreshes statuses and assembles an XLSX workbook through `ReportService`, which embeds photos and checkbox-style status cells.
   - The evacuation status table now also stores the timestamp of the last entrance detection per person (`entrance_time`) so the report can display when each employee entered.
   - Evacuation status refresh paginates through all list items, so lists with more than 1000 people still update statuses correctly.
   - Telegram uploads of evacuation workbooks now read the list item ID from the dedicated “ID” column (column 3) produced by `ReportService`, so evacuation status updates line up with the exported report.
@@ -35,7 +35,7 @@ See [TECHNICAL-SPEC.md](TECHNICAL-SPEC.md) for the aligned functional specificat
 - **Evacuation report**
   1. A request to `/evacuation/report?listIds=...` or a Telegram callback triggers `EvacuationReportService`.
   2. The service asks `EvacuationStatusService` to recompute statuses (using VEZHA detections) and load active list item ids from PostgreSQL, including each person’s most recent entrance time.
-  3. `ReportService` builds one sheet per list with status dropdowns, entrance time column, and embedded photos; the controller streams it as XLSX.
+  3. `ReportService` builds one sheet per list with status checkboxes, entrance time column, and embedded photos; the controller streams it as XLSX.
 - **Cafeteria attendance report**
   1. Scheduler or `/cafeteria/build` triggers `AttendanceReportService`.
   2. Detections are pulled for configured analytics IDs and time windows; unique person counts per meal/list are calculated.
