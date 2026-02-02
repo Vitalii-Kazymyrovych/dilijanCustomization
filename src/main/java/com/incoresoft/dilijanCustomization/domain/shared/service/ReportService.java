@@ -35,8 +35,8 @@ public class ReportService {
     private static final int COL_WIDTH_COMMENT = 50 * 256;
     /** Width of the ID column in characters (scaled by 256 for POI). */
     private static final int COL_WIDTH_ID      = 20 * 256;
-    private static final String CHECKBOX_CHECKED = "TRUE";
-    private static final String CHECKBOX_UNCHECKED = "FALSE";
+    private static final String CHECKBOX_CHECKED = "☑";
+    private static final String CHECKBOX_UNCHECKED = "☐";
     private static final String[] EVAC_CHECKBOX_OPTIONS = {CHECKBOX_CHECKED, CHECKBOX_UNCHECKED};
     private static final List<String> COLUMNS = List.of("Category", "Breakfast", "Lunch", "Dinner", "Total");
 
@@ -146,8 +146,8 @@ public class ReportService {
                     Row row = sh.createRow(r);
 
                     // Status checkbox (default checked)
-                    Cell statusCell = row.createCell(0, CellType.BOOLEAN);
-                    statusCell.setCellValue(true);
+                    Cell statusCell = row.createCell(0, CellType.STRING);
+                    statusCell.setCellValue(CHECKBOX_CHECKED);
                     statusCell.setCellStyle(checkboxColumnStyle(wb));
 
                     // Entrance time

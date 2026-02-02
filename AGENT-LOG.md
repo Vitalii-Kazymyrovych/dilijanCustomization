@@ -28,3 +28,4 @@
 - Restored checked-by-default status boxes in evacuation XLSX reports and updated related test/README.
 - Exported evacuation status cells as boolean TRUE/FALSE with validation so Google Sheets shows checkboxes, and updated report/Telegram tests plus README notes.
 - Added repo policy to run tests after each code change, documented it in README, and executed the Maven test suite.
+- Added Telegram evacuation report progress messaging with timing, restored checkbox symbols in evacuation report exports, updated tests, and refreshed README.

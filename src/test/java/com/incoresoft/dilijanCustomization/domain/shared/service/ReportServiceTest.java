@@ -79,7 +79,7 @@ class ReportServiceTest {
             Sheet sheet = wb.getSheet("List_Unsafe_Name_");
             assertThat(sheet).isNotNull();
             Row data = sheet.getRow(1);
-            assertThat(data.getCell(0).getBooleanCellValue()).isTrue();
+            assertThat(data.getCell(0).getStringCellValue()).isEqualTo("☑");
             String expectedTime = Instant.ofEpochMilli(entranceTime)
                     .atZone(ZoneId.systemDefault())
                     .format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));

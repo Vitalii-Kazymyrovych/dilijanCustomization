@@ -9,7 +9,7 @@ See [TECHNICAL-SPEC.md](TECHNICAL-SPEC.md) for the aligned functional specificat
 - **HTTP entrypoints**: REST controllers expose webhooks and reporting endpoints for VEZHA and operators.
   - `VezhaWebhookController` ingests VEZHA face events to add/remove unknown persons from the dedicated face list. It delegates to `UnknownPersonService` for the add/remove logic and detection lookups.  
   - `CafeteriaReportController` and `EvacuationReportController` expose report generation endpoints (per-day attendance pivot and multi-list evacuation workbooks respectively).
-- **Telegram bot**: `TelegramBot` orchestrates chat flows for evacuation and attendance reports, forwards uploaded evacuation workbooks to `EvacuationStatusService`, and uses `AttendanceReportService` / `EvacuationReportService` to generate XLSX files on demand.
+- **Telegram bot**: `TelegramBot` orchestrates chat flows for evacuation and attendance reports, forwards uploaded evacuation workbooks to `EvacuationStatusService`, and uses `AttendanceReportService` / `EvacuationReportService` to generate XLSX files on demand. It also posts a “Generating evacuation report” message and reports the generation duration after the file is sent.
 - **VEZHA integration**: `FaceApiRepository` wraps all VEZHA calls (detections, list CRUD, storage downloads). Higher-level services rely on it for analytics queries, unknown person management, and pulling list metadata/images.
   - Detection queries send a multipart request that always contains an empty `image` part with a non-blank filename (matching the VEZHA Swagger contract) even when filtering without an uploaded file.
 - **Unknown-person pipeline**: `UnknownListInitializer` ensures a dedicated face list exists at startup and records its id in `UnknownListRegistry`. `UnknownPersonService` then:
@@ -17,7 +17,7 @@ See [TECHNICAL-SPEC.md](TECHNICAL-SPEC.md) for the aligned functional specificat
   - deletes items when VEZHA signals removal;
   - performs weekly cleanup of the unknown list.
   - Startup list initialization now logs and skips if VEZHA returns an invalid response (e.g., invalid Content-Type), preventing the application from failing on boot.
-- **Evacuation domain**: `EvacuationStatusService` periodically pulls detections for time-attendance-enabled lists, determines who last entered vs. exited, and persists statuses via `EvacuationStatusRepository` (PostgreSQL). `EvacuationReportService` refreshes statuses and assembles an XLSX workbook through `ReportService`, which embeds photos and exports the status column as boolean `TRUE`/`FALSE` values with validation so Google Sheets renders checkboxes (checked by default).
+- **Evacuation domain**: `EvacuationStatusService` periodically pulls detections for time-attendance-enabled lists, determines who last entered vs. exited, and persists statuses via `EvacuationStatusRepository` (PostgreSQL). `EvacuationReportService` refreshes statuses and assembles an XLSX workbook through `ReportService`, which embeds photos and exports the status column as ☑/☐ symbols with validation so Google Sheets renders checkboxes (checked by default).
   - The evacuation status table stores the timestamps of the last entrance and exit detections per person (`entrance_time`, `exit_time`) plus a `manually_updated` flag so manual overrides are preserved until a newer detection arrives.
   - Evacuation status refresh paginates through all list items, so lists with more than 1000 people still update statuses correctly.
   - Telegram uploads of evacuation workbooks now read the list item ID from the dedicated “ID” column (column 3) produced by `ReportService`, so evacuation status updates line up with the exported report.
@@ -35,7 +35,7 @@ See [TECHNICAL-SPEC.md](TECHNICAL-SPEC.md) for the aligned functional specificat
 - **Evacuation report**
   1. A request to `/evacuation/report?listIds=...` or a Telegram callback triggers `EvacuationReportService`.
   2. The service asks `EvacuationStatusService` to recompute statuses (using VEZHA detections) and load active list item ids from PostgreSQL, including each person’s most recent entrance time.
-  3. `ReportService` builds one sheet per list with status checkboxes (boolean `TRUE`/`FALSE` cells for Google Sheets), entrance time column, and embedded photos; the controller streams it as XLSX.
+  3. `ReportService` builds one sheet per list with status checkboxes (☑/☐ symbol cells for Google Sheets), entrance time column, and embedded photos; the controller streams it as XLSX.
 - **Cafeteria attendance report**
   1. Scheduler or `/cafeteria/build` triggers `AttendanceReportService`.
   2. Detections are pulled for configured analytics IDs and time windows; unique person counts per meal/list are calculated.
