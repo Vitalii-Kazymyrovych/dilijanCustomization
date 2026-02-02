@@ -21,11 +21,11 @@ class TelegramBotTest {
             header.createCell(3).setCellValue("ID");
 
             var row1 = sheet.createRow(1);
-            row1.createCell(0).setCellValue("☐"); // status false
+            row1.createCell(0).setCellValue(false); // status false
             row1.createCell(3).setCellValue(10);          // numeric ID
 
             var row2 = sheet.createRow(2);
-            row2.createCell(0).setCellValue("☑");   // status true
+            row2.createCell(0).setCellValue(true);   // status true
             row2.createCell(3).setCellValue("11");        // string ID
 
             Map<String, Long> nameToId = Map.of("List_1", 99L);
@@ -45,7 +45,7 @@ class TelegramBotTest {
             var sheet = wb.createSheet("List_1");
             sheet.createRow(0);
             var row = sheet.createRow(1);
-            row.createCell(0).setCellValue("☐");
+            row.createCell(0).setCellValue(false);
             // no ID column set
 
             // Sheet not present in nameToId

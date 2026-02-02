@@ -7,6 +7,7 @@
 
 ## How to run tests
 - Unit tests (default): `./mvnw -B test`
+- Run tests after each code change (not just on request).
 
 ## Config files
 - The app imports external config from: `./config/config.yaml`
