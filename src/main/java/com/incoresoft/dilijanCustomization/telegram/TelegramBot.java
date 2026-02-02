@@ -19,8 +19,10 @@ import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.send.SendDocument;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
+import org.telegram.telegrambots.meta.api.methods.updatingmessages.DeleteMessage;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageReplyMarkup;
 import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
+import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.api.objects.InputFile;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
@@ -30,6 +32,7 @@ import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.Keyboard
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
 import java.io.File;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -167,12 +170,18 @@ public class TelegramBot extends TelegramLongPollingBot {
                 execute(new SendMessage(chatId.toString(), "No lists selected. Use the checkboxes to pick at least one list."));
                 return;
             }
+            Integer waitMessageId = null;
+            long startNanos = System.nanoTime();
             try {
+                waitMessageId = sendGeneratingMessage(chatId);
                 File report = reportService.buildEvacuationReport(selected.stream().toList());
                 SendDocument doc = new SendDocument(chatId.toString(), new InputFile(report));
                 doc.setCaption("Evacuation report for lists: " + selected.size());
                 execute(doc);
+                deleteMessageIfPresent(chatId, waitMessageId);
+                sendGenerationTime(chatId, startNanos);
             } catch (Exception ex) {
+                deleteMessageIfPresent(chatId, waitMessageId);
                 log.error("Report generation failed: {}", ex.getMessage(), ex);
                 execute(new SendMessage(chatId.toString(), "Failed to generate report: " + ex.getMessage()));
             }
@@ -298,12 +307,21 @@ public class TelegramBot extends TelegramLongPollingBot {
             execute(new SendMessage(chatId.toString(), "No lists with reports enabled."));
             return;
         }
+        Integer waitMessageId = null;
+        long startNanos = System.nanoTime();
         List<Long> allIds = eligible.stream().map(FaceListDto::getId).toList();
-        File report = reportService.buildEvacuationReport(allIds);
-
-        SendDocument doc = new SendDocument(chatId.toString(), new InputFile(report));
-        doc.setCaption("Evacuation report (ALL enabled lists): " + allIds.size() + " lists");
-        execute(doc);
+        try {
+            waitMessageId = sendGeneratingMessage(chatId);
+            File report = reportService.buildEvacuationReport(allIds);
+            SendDocument doc = new SendDocument(chatId.toString(), new InputFile(report));
+            doc.setCaption("Evacuation report (ALL enabled lists): " + allIds.size() + " lists");
+            execute(doc);
+            deleteMessageIfPresent(chatId, waitMessageId);
+            sendGenerationTime(chatId, startNanos);
+        } catch (Exception ex) {
+            deleteMessageIfPresent(chatId, waitMessageId);
+            throw ex;
+        }
     }
 
     // ------ Attendance ------
@@ -332,6 +350,38 @@ public class TelegramBot extends TelegramLongPollingBot {
 
     private void sendStarted(Long chatId) throws TelegramApiException {
         execute(new SendMessage(chatId.toString(), "Started Report Creation. Wait a minute."));
+    }
+
+    private Integer sendGeneratingMessage(Long chatId) throws TelegramApiException {
+        Message message = execute(new SendMessage(chatId.toString(), "Generating evacuation report. Please wait🔄"));
+        return message != null ? message.getMessageId() : null;
+    }
+
+    private void deleteMessageIfPresent(Long chatId, Integer messageId) {
+        if (messageId == null) {
+            return;
+        }
+        try {
+            execute(new DeleteMessage(chatId.toString(), messageId));
+        } catch (TelegramApiException ex) {
+            log.warn("Failed to delete waiting message {}: {}", messageId, ex.getMessage());
+        }
+    }
+
+    private void sendGenerationTime(Long chatId, long startNanos) throws TelegramApiException {
+        Duration duration = Duration.ofNanos(System.nanoTime() - startNanos);
+        execute(new SendMessage(chatId.toString(), "Generation took: " + formatDuration(duration)));
+    }
+
+    private String formatDuration(Duration duration) {
+        long totalMillis = duration.toMillis();
+        long minutes = totalMillis / 60000;
+        long seconds = (totalMillis % 60000) / 1000;
+        long millis = totalMillis % 1000;
+        if (minutes > 0) {
+            return String.format("%dm %ds", minutes, seconds);
+        }
+        return String.format("%d.%03ds", seconds, millis);
     }
 
     private void generateAttendanceForDate(Long chatId, LocalDate date) throws Exception {
