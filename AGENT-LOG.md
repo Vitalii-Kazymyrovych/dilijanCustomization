@@ -29,3 +29,4 @@
 - Exported evacuation status cells as boolean TRUE/FALSE with validation so Google Sheets shows checkboxes, and updated report/Telegram tests plus README notes.
 - Added repo policy to run tests after each code change, documented it in README, and executed the Maven test suite.
 - Added Telegram evacuation report progress messaging with timing, restored checkbox symbols in evacuation report exports, updated tests, and refreshed README.
+- Enhanced Telegram evacuation workbook ingestion to support exact full-name matching from the “Name” column when the “ID” column is blank, added regression tests for exact-match and non-exact-match behavior, and updated README documentation.
