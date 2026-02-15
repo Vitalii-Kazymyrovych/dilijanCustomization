@@ -80,6 +80,7 @@ public class TelegramBot extends TelegramLongPollingBot {
     private static final int REPORT_COL_ID = 3;
     private static final int REPORT_COL_NAME = 4;
     private static final int LIST_ITEMS_PAGE_LIMIT = 1000;
+    private static final int MAX_LIST_ITEMS_PAGES = 10_000;
 
     @Override
     public void onUpdateReceived(Update update) {
@@ -486,8 +487,13 @@ public class TelegramBot extends TelegramLongPollingBot {
 
                 Boolean status = parseStatus(row.getCell(REPORT_COL_STATUS));
                 Long listItemId = parseListItemId(row.getCell(REPORT_COL_ID));
+                boolean resolvedByName = false;
                 if (listItemId == null) {
                     listItemId = resolveListItemIdByName(row.getCell(REPORT_COL_NAME), listNameToId);
+                    resolvedByName = listItemId != null;
+                }
+                if (status == null && resolvedByName) {
+                    status = true;
                 }
                 if (status != null && listItemId != null) {
                     updates.add(new EvacuationUpdate(listId, listItemId, status));
@@ -506,7 +512,9 @@ public class TelegramBot extends TelegramLongPollingBot {
 
             Map<String, Long> itemNameToId = new HashMap<>();
             int offset = 0;
-            while (true) {
+            int pagesRead = 0;
+            int previousSize = 0;
+            while (pagesRead++ < MAX_LIST_ITEMS_PAGES) {
                 ListItemsResponse response = faceApiRepository.getListItems(
                         listId,
                         "",
@@ -529,7 +537,21 @@ public class TelegramBot extends TelegramLongPollingBot {
                 if (items.size() < LIST_ITEMS_PAGE_LIMIT) {
                     break;
                 }
+
+                if (itemNameToId.size() == previousSize) {
+                    log.warn("Stopping list-item name mapping pagination for list {} because no new items were discovered at offset {}.",
+                            listId,
+                            offset);
+                    break;
+                }
+                previousSize = itemNameToId.size();
                 offset += LIST_ITEMS_PAGE_LIMIT;
+            }
+
+            if (pagesRead >= MAX_LIST_ITEMS_PAGES) {
+                log.warn("Stopped list-item name mapping pagination for list {} after hitting the safety page limit of {}.",
+                        listId,
+                        MAX_LIST_ITEMS_PAGES);
             }
 
             mappings.put(listId, itemNameToId);
