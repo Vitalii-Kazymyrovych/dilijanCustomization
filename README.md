@@ -21,7 +21,8 @@ See [TECHNICAL-SPEC.md](TECHNICAL-SPEC.md) for the aligned functional specificat
   - The evacuation status table stores the timestamps of the last entrance and exit detections per person (`entrance_time`, `exit_time`) plus a `manually_updated` flag so manual overrides are preserved until a newer detection arrives.
   - Evacuation status refresh paginates through all list items, so lists with more than 1000 people still update statuses correctly.
   - Telegram uploads of evacuation workbooks now read the list item ID from the dedicated “ID” column (column 3) produced by `ReportService`, so evacuation status updates line up with the exported report.
-  - If the ID column is empty, Telegram upload parsing now falls back to the “Name” column and resolves people by exact full-name match within the same list.
+  - If the ID column is empty, Telegram upload parsing now falls back to the “Name” column and resolves people by exact full-name match within the same list; when such a row has no explicit status value, it is treated as “On site” (present) so adding names alone works for manual additions.
+  - Telegram workbook import now also guards list-item pagination while building the full-name lookup, so uploads still complete even if VEZHA repeats the same full page and ignores pagination offsets.
 - **Cafeteria attendance**: `AttendanceReportService` defines meal time windows, counts unique list item detections per meal, and passes pivot rows to `ReportService` for XLSX export. A nightly schedule can auto-run the report.
 - **Configuration & infrastructure**:
   - External config lives in `config/config.yaml` (see `config/config.yaml.example`); properties are bound via `*Props` classes and injected into the beans above.
@@ -89,3 +90,5 @@ Configuration is loaded from `config/config.yaml` (not committed) with defaults 
 - Expected failure paths (VEZHA detection errors, evacuation status queries) now log concise summaries at `WARN` without stack traces to keep test output clean while still surfacing the root cause.
 - Evacuation report generation now fails fast if the status query throws, instead of sending an empty workbook when the PostgreSQL connection is misconfigured.
 - Search-by-photo errors now log the HTTP status/response summary (without stack traces) so operators immediately see VEZHA’s reason, such as `ERROR_NO_FACES_DETECTED`.
+- Telegram full-name fallback lookup now includes pagination safety guards to avoid infinite loops when VEZHA list-item pagination does not advance; matching continues with the names collected so far.
+- Telegram workbook ingestion treats exact-name fallback rows with blank status as present (`true`) so operators can add only full names to mark additional people on site.
