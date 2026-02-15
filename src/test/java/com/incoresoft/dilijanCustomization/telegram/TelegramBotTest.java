@@ -58,4 +58,48 @@ class TelegramBotTest {
             assertThat(updates).isEmpty();
         }
     }
+
+    @Test
+    void extractUpdatesResolvesIdByExactFullNameWhenIdIsMissing() throws Exception {
+        try (XSSFWorkbook wb = new XSSFWorkbook()) {
+            var sheet = wb.createSheet("List_1");
+            var header = sheet.createRow(0);
+            header.createCell(0).setCellValue("Status");
+            header.createCell(4).setCellValue("Name");
+
+            var row = sheet.createRow(1);
+            row.createCell(0).setCellValue(true);
+            row.createCell(4).setCellValue("John Smith");
+
+            Map<String, Long> nameToId = Map.of("List_1", 99L);
+            Map<Long, Map<String, Long>> listItemMappings = Map.of(99L, Map.of("John Smith", 123L));
+
+            List<TelegramBot.EvacuationUpdate> updates =
+                    TelegramBot.extractUpdatesFromWorkbook(wb, nameToId, listItemMappings);
+
+            assertThat(updates).containsExactly(
+                    new TelegramBot.EvacuationUpdate(99L, 123L, true)
+            );
+        }
+    }
+
+    @Test
+    void extractUpdatesDoesNotResolveIdForNonExactNameMatch() throws Exception {
+        try (XSSFWorkbook wb = new XSSFWorkbook()) {
+            var sheet = wb.createSheet("List_1");
+            sheet.createRow(0);
+
+            var row = sheet.createRow(1);
+            row.createCell(0).setCellValue(true);
+            row.createCell(4).setCellValue("John Smith");
+
+            Map<String, Long> nameToId = Map.of("List_1", 99L);
+            Map<Long, Map<String, Long>> listItemMappings = Map.of(99L, Map.of("john smith", 123L));
+
+            List<TelegramBot.EvacuationUpdate> updates =
+                    TelegramBot.extractUpdatesFromWorkbook(wb, nameToId, listItemMappings);
+
+            assertThat(updates).isEmpty();
+        }
+    }
 }

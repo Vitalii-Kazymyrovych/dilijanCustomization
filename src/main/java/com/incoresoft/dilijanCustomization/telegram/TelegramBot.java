@@ -5,6 +5,8 @@ import com.incoresoft.dilijanCustomization.domain.evacuation.service.EvacuationR
 import com.incoresoft.dilijanCustomization.domain.evacuation.service.EvacuationStatusService;
 import com.incoresoft.dilijanCustomization.domain.shared.dto.FaceListDto;
 import com.incoresoft.dilijanCustomization.domain.shared.dto.FaceListsResponse;
+import com.incoresoft.dilijanCustomization.domain.shared.dto.ListItemDto;
+import com.incoresoft.dilijanCustomization.domain.shared.dto.ListItemsResponse;
 import com.incoresoft.dilijanCustomization.repository.FaceApiRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -76,6 +78,8 @@ public class TelegramBot extends TelegramLongPollingBot {
     // Column indexes in the evacuation workbook exported by ReportService
     private static final int REPORT_COL_STATUS = 0;
     private static final int REPORT_COL_ID = 3;
+    private static final int REPORT_COL_NAME = 4;
+    private static final int LIST_ITEMS_PAGE_LIMIT = 1000;
 
     @Override
     public void onUpdateReceived(Update update) {
@@ -415,7 +419,8 @@ public class TelegramBot extends TelegramLongPollingBot {
                     String sheetName = sanitizeSheetName(list.getName() != null ? list.getName() : ("List_" + list.getId()));
                     nameToId.put(sheetName, list.getId());
                 }
-                List<EvacuationUpdate> updates = extractUpdatesFromWorkbook(wb, nameToId);
+                Map<Long, Map<String, Long>> itemNameMappings = buildListItemNameMappings(nameToId.values());
+                List<EvacuationUpdate> updates = extractUpdatesFromWorkbook(wb, nameToId, itemNameMappings);
                 for (EvacuationUpdate upd : updates) {
                     evacuationStatusService.updateStatus(upd.listId(), upd.listItemId(), upd.status());
                 }
@@ -457,6 +462,12 @@ public class TelegramBot extends TelegramLongPollingBot {
      * where the list item ID is stored in column 3.
      */
     static List<EvacuationUpdate> extractUpdatesFromWorkbook(Workbook wb, Map<String, Long> nameToId) {
+        return extractUpdatesFromWorkbook(wb, nameToId, Collections.emptyMap());
+    }
+
+    static List<EvacuationUpdate> extractUpdatesFromWorkbook(Workbook wb,
+                                                             Map<String, Long> nameToId,
+                                                             Map<Long, Map<String, Long>> listItemNameMappings) {
         List<EvacuationUpdate> updates = new ArrayList<>();
         if (wb == null || nameToId == null || nameToId.isEmpty()) {
             return updates;
@@ -466,6 +477,7 @@ public class TelegramBot extends TelegramLongPollingBot {
             Sheet sheet = wb.getSheetAt(s);
             Long listId = nameToId.get(sheet.getSheetName());
             if (listId == null) continue;
+            Map<String, Long> listNameToId = listItemNameMappings.getOrDefault(listId, Collections.emptyMap());
 
             int last = sheet.getLastRowNum();
             for (int r = 1; r <= last; r++) {
@@ -474,12 +486,69 @@ public class TelegramBot extends TelegramLongPollingBot {
 
                 Boolean status = parseStatus(row.getCell(REPORT_COL_STATUS));
                 Long listItemId = parseListItemId(row.getCell(REPORT_COL_ID));
+                if (listItemId == null) {
+                    listItemId = resolveListItemIdByName(row.getCell(REPORT_COL_NAME), listNameToId);
+                }
                 if (status != null && listItemId != null) {
                     updates.add(new EvacuationUpdate(listId, listItemId, status));
                 }
             }
         }
         return updates;
+    }
+
+    private Map<Long, Map<String, Long>> buildListItemNameMappings(Iterable<Long> listIds) {
+        Map<Long, Map<String, Long>> mappings = new HashMap<>();
+        for (Long listId : listIds) {
+            if (listId == null) {
+                continue;
+            }
+
+            Map<String, Long> itemNameToId = new HashMap<>();
+            int offset = 0;
+            while (true) {
+                ListItemsResponse response = faceApiRepository.getListItems(
+                        listId,
+                        "",
+                        "",
+                        offset,
+                        LIST_ITEMS_PAGE_LIMIT,
+                        "asc",
+                        "name");
+                List<ListItemDto> items = (response == null || response.getData() == null)
+                        ? Collections.emptyList()
+                        : response.getData();
+
+                for (ListItemDto item : items) {
+                    if (item == null || item.getId() == null || item.getName() == null || item.getName().isBlank()) {
+                        continue;
+                    }
+                    itemNameToId.putIfAbsent(item.getName().trim(), item.getId());
+                }
+
+                if (items.size() < LIST_ITEMS_PAGE_LIMIT) {
+                    break;
+                }
+                offset += LIST_ITEMS_PAGE_LIMIT;
+            }
+
+            mappings.put(listId, itemNameToId);
+        }
+        return mappings;
+    }
+
+    private static Long resolveListItemIdByName(Cell nameCell, Map<String, Long> listNameToId) {
+        if (nameCell == null || listNameToId == null || listNameToId.isEmpty()) {
+            return null;
+        }
+        String raw = switch (nameCell.getCellType()) {
+            case STRING -> nameCell.getStringCellValue();
+            default -> nameCell.toString();
+        };
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        return listNameToId.get(raw.trim());
     }
 
     private static Boolean parseStatus(Cell statusCell) {
