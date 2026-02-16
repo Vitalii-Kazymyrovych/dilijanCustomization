@@ -34,7 +34,7 @@ public class UnknownPersonService {
     // ADD flow
     public Optional<ListItemDto> handleEventAddIfUnknown(FaceEventDto event) {
         if (event.isInList()) {
-            log.info("[ADD] Skip: already in a list (list_id={})", event.getFace().getListItem().getList().getId());
+            log.info("[ADD] Skip: already in a list (list_id={})", resolveListId(event));
             return Optional.empty();
         }
 
@@ -82,6 +82,9 @@ public class UnknownPersonService {
     }
 
     private List<DetectionDto> fetchCandidateDetections(FaceEventDto event) {
+        if (event.getTimestamp() == null) {
+            throw new IllegalStateException("Face event timestamp is required");
+        }
         long windowStart = event.getTimestamp() - DETECTION_WINDOW_MILLIS;
         long windowEnd = event.getTimestamp() + DETECTION_WINDOW_MILLIS;
         List<DetectionDto> detections = Optional.ofNullable(
@@ -130,8 +133,18 @@ public class UnknownPersonService {
         return event.isInList()
                 && event.getFace() != null
                 && event.getFace().getListItem() != null
+                && event.getFace().getListItem().getList() != null
                 && Objects.equals(event.getFace().getListItem().getList().getId(), unknownListRegistry.get())
                 && event.getFace().getListItem().getId() != null;
+    }
+
+    private Long resolveListId(FaceEventDto event) {
+        return Optional.ofNullable(event)
+                .map(FaceEventDto::getFace)
+                .map(FaceEventDto.FacePayload::getListItem)
+                .map(FaceEventDto.ListItemRef::getList)
+                .map(FaceEventDto.PersonListRef::getId)
+                .orElse(null);
     }
 
     private List<ListItemDto> fetchListItems(int limit) {
