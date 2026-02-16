@@ -32,3 +32,5 @@
 - Enhanced Telegram evacuation workbook ingestion to support exact full-name matching from the “Name” column when the “ID” column is blank, added regression tests for exact-match and non-exact-match behavior, and updated README documentation.
 - Fixed Telegram evacuation upload full-name fallback by adding list-item pagination safety guards (stop on no-progress / hard page cap) and added a regression test to prevent hangs when VEZHA repeats full pages.
 - Updated Telegram evacuation workbook parsing so exact full-name fallback rows without a status cell default to present/on-site (true), added regression coverage, and refreshed README.
+- Added broad regression coverage for unknown-person add/remove/cleanup flows, webhook controller response handling, global exception mapping, and PostgreSQL property fallbacks; executed the full Maven test suite.
+- Hardened `UnknownPersonService` against malformed webhook payloads (null nested list metadata) and missing timestamps, expanded unit coverage for those edge cases, and re-ran the full Maven test suite.

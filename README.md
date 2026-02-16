@@ -77,7 +77,7 @@ Configuration is loaded from `config/config.yaml` (not committed) with defaults 
 - Avoid hitting live VEZHA/Telegram services during tests; override config with safe endpoints/tokens when needed.
 
 ## Testing notes
-- Unit tests now cover the report builders (`ReportService`, `AttendanceReportService`, `EvacuationReportService`), initialization helpers (`UnknownListInitializer`, `UnknownListRegistry`), VEZHA client pagination (`FaceApiRepository`), and evacuation status persistence logic (`EvacuationStatusService`).
+- Unit tests now cover the report builders (`ReportService`, `AttendanceReportService`, `EvacuationReportService`), initialization helpers (`UnknownListInitializer`, `UnknownListRegistry`), VEZHA client pagination (`FaceApiRepository`), and evacuation status persistence logic (`EvacuationStatusService`), plus unknown-person lifecycle logic (`UnknownPersonService`), webhook endpoint behavior (`VezhaWebhookController`), global error responses (`GlobalExceptionHandler`), and PostgreSQL property fallbacks (`PostgresProps`).
 - Run `./mvnw -B test` after each code change to keep feedback tight and prevent regressions.
 - Pagination in `FaceApiRepository#getAllDetectionsInWindow` now ignores `total/pages` metadata and keeps requesting until a page comes back empty or partial, so detections are not missed when VEZHA reports only one page.
 - `FaceApiRepository` normalizes `vezha.api.base-url` values so trailing slashes do not break detection queries.
@@ -92,3 +92,4 @@ Configuration is loaded from `config/config.yaml` (not committed) with defaults 
 - Search-by-photo errors now log the HTTP status/response summary (without stack traces) so operators immediately see VEZHA’s reason, such as `ERROR_NO_FACES_DETECTED`.
 - Telegram full-name fallback lookup now includes pagination safety guards to avoid infinite loops when VEZHA list-item pagination does not advance; matching continues with the names collected so far.
 - Telegram workbook ingestion treats exact-name fallback rows with blank status as present (`true`) so operators can add only full names to mark additional people on site.
+- `UnknownPersonService` now safely handles partially populated webhook payloads (missing list/list_item nesting) and fails fast on missing event timestamps, with regression tests covering both guards.
