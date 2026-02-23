@@ -34,3 +34,4 @@
 - Updated Telegram evacuation workbook parsing so exact full-name fallback rows without a status cell default to present/on-site (true), added regression coverage, and refreshed README.
 - Added broad regression coverage for unknown-person add/remove/cleanup flows, webhook controller response handling, global exception mapping, and PostgreSQL property fallbacks; executed the full Maven test suite.
 - Hardened `UnknownPersonService` against malformed webhook payloads (null nested list metadata) and missing timestamps, expanded unit coverage for those edge cases, and re-ran the full Maven test suite.
+- Switched evacuation status/report data reads from VEZHA REST pagination to direct VEZHA PostgreSQL queries (`face_lists`, `face_list_items`, `face_list_items_images`, `face_detections`) via new `VezhaDbRepository`/`vezha.db.*` config while keeping writes in the local evacuation DB; updated evacuation tests, config example, and README accordingly.

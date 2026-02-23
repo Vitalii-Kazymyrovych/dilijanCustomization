@@ -4,9 +4,8 @@ import com.incoresoft.dilijanCustomization.domain.evacuation.dto.EvacuationRepor
 import com.incoresoft.dilijanCustomization.domain.evacuation.dto.EvacuationStatus;
 import com.incoresoft.dilijanCustomization.domain.shared.dto.FaceListDto;
 import com.incoresoft.dilijanCustomization.domain.shared.dto.ListItemDto;
-import com.incoresoft.dilijanCustomization.domain.shared.dto.ListItemsResponse;
 import com.incoresoft.dilijanCustomization.domain.shared.service.ReportService;
-import com.incoresoft.dilijanCustomization.repository.FaceApiRepository;
+import com.incoresoft.dilijanCustomization.repository.VezhaDbRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -46,10 +45,7 @@ import java.util.Set;
 @ConditionalOnProperty(prefix = "evacuation", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class EvacuationReportService {
 
-    private static final int FACE_LIST_FETCH_LIMIT = 100;
-    private static final int LIST_ITEMS_FETCH_LIMIT = 1000;
-
-    private final FaceApiRepository repo;
+    private final VezhaDbRepository vezhaDbRepository;
     private final ReportService reportService;
     private final EvacuationStatusService evacuationStatusService;
 
@@ -76,19 +72,11 @@ public class EvacuationReportService {
     }
 
     private Optional<FaceListDto> fetchFaceListMeta(Long listId) {
-        var response = repo.getFaceLists(FACE_LIST_FETCH_LIMIT);
-        if (response == null || response.getData() == null) {
-            return Optional.empty();
-        }
-        return response.getData()
-                .stream()
-                .filter(d -> Objects.equals(d.getId(), listId))
-                .findFirst();
+        return Optional.ofNullable(vezhaDbRepository.findFaceList(listId));
     }
 
     private List<ListItemDto> fetchAllListItems(Long listId) {
-        ListItemsResponse resp = repo.getListItems(listId, "", "", 0, LIST_ITEMS_FETCH_LIMIT, "asc", "name");
-        return (resp != null && resp.getData() != null) ? resp.getData() : List.of();
+        return vezhaDbRepository.findListItems(listId);
     }
 
     private List<EvacuationReportRow> filterPresentItems(Map<Long, EvacuationStatus> activeStatuses, List<ListItemDto> items) {
