@@ -1,12 +1,14 @@
 package com.incoresoft.dilijanCustomization.domain.attendance.service;
 
 import com.incoresoft.dilijanCustomization.config.CafeteriaProps;
+import com.incoresoft.dilijanCustomization.config.VezhaDbProps;
 import com.incoresoft.dilijanCustomization.domain.attendance.dto.CafeteriaPivotRow;
 import com.incoresoft.dilijanCustomization.domain.shared.dto.DetectionDto;
 import com.incoresoft.dilijanCustomization.domain.shared.dto.FaceListDto;
 import com.incoresoft.dilijanCustomization.domain.shared.dto.FaceListsResponse;
 import com.incoresoft.dilijanCustomization.domain.shared.service.ReportService;
 import com.incoresoft.dilijanCustomization.repository.FaceApiRepository;
+import com.incoresoft.dilijanCustomization.repository.VezhaDbRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -40,6 +42,8 @@ public class AttendanceReportService {
 
     private final CafeteriaProps cafe;
     private final FaceApiRepository repo;
+    private final VezhaDbRepository vezhaDbRepository;
+    private final VezhaDbProps vezhaDbProps;
     private final ReportService reportService;
 
     @Scheduled(cron = "${vezha.cafe.schedule-cron:0 0 22 * * *}", zone = "${vezha.cafe.timezone:Asia/Yerevan}")
@@ -81,19 +85,31 @@ public class AttendanceReportService {
     private Map<Long, Set<Long>> queryUniqueListItemIds(long startMillis, long endMillis, List<Long> listIds) {
         Map<Long, Set<Long>> uniquesByList = new HashMap<>();
         for (Long listId : listIds) {
-            List<DetectionDto> dets = repo.getAllDetectionsInWindow(
-                    listId,
-                    cafe.getAnalyticsIds(),
-                    startMillis,
-                    endMillis,
-                    DETECTION_PAGE_LIMIT
-            );
+            List<DetectionDto> dets = fetchDetections(listId, startMillis, endMillis);
             Set<Long> uniqueIds = uniquesByList.computeIfAbsent(listId, k -> new HashSet<>());
             collectUniqueListItemIds(dets, uniqueIds);
         }
         // Ensure empty sets for lists without detections (visible zeros)
         for (Long id : listIds) uniquesByList.computeIfAbsent(id, k -> new HashSet<>());
         return uniquesByList;
+    }
+
+    private List<DetectionDto> fetchDetections(Long listId, long startMillis, long endMillis) {
+        if (vezhaDbProps.isEnabled()) {
+            return vezhaDbRepository.findLatestDetectionsByListItem(
+                    listId,
+                    cafe.getAnalyticsIds(),
+                    startMillis,
+                    endMillis
+            );
+        }
+        return repo.getAllDetectionsInWindow(
+                listId,
+                cafe.getAnalyticsIds(),
+                startMillis,
+                endMillis,
+                DETECTION_PAGE_LIMIT
+        );
     }
 
     private void collectUniqueListItemIds(List<DetectionDto> detections, Set<Long> uniqueIds) {
@@ -104,6 +120,15 @@ public class AttendanceReportService {
     }
 
     private Map<Long, String> fetchListNames() {
+        if (vezhaDbProps.isEnabled()) {
+            return vezhaDbRepository.findListsWithAttendanceEnabled().stream()
+                    .filter(l -> l.getId() != null && StringUtils.hasText(l.getName()))
+                    .collect(Collectors.toMap(
+                            FaceListDto::getId,
+                            l -> l.getName().trim(),
+                            (existing, replacement) -> replacement,
+                            HashMap::new));
+        }
         FaceListsResponse lists = repo.getFaceLists(DEFAULT_FACE_LIST_LIMIT);
         if (lists == null || lists.getData() == null) {
             return Map.of();
@@ -156,7 +181,8 @@ public class AttendanceReportService {
     }
 
     private List<Long> resolveTargetListIds(List<Long> onlyListIds, Map<Long, String> listIdToName) {
-        Set<String> excludedNames = cafe.getExcludedListNames().stream()
+        Set<String> excludedNames = (cafe.getExcludedListNames() == null ? Set.<String>of() : cafe.getExcludedListNames())
+                .stream()
                 .map(AttendanceReportService::safeLower)
                 .collect(Collectors.toSet());
 

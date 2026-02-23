@@ -16,7 +16,7 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 @RequiredArgsConstructor
 @Slf4j
-@ConditionalOnProperty(prefix = "unknown", name = "autostart", havingValue = "true", matchIfMissing = true)
+@ConditionalOnProperty(prefix = "unknown", name = "autostart", havingValue = "true", matchIfMissing = false)
 public class UnknownListInitializer {
 
     private final FaceApiRepository faceApiRepository;

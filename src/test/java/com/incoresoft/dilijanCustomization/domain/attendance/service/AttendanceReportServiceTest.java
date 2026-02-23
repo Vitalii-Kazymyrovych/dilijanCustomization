@@ -1,10 +1,12 @@
 package com.incoresoft.dilijanCustomization.domain.attendance.service;
 
 import com.incoresoft.dilijanCustomization.config.CafeteriaProps;
+import com.incoresoft.dilijanCustomization.config.VezhaDbProps;
 import com.incoresoft.dilijanCustomization.domain.attendance.dto.CafeteriaPivotRow;
 import com.incoresoft.dilijanCustomization.domain.shared.dto.*;
 import com.incoresoft.dilijanCustomization.domain.shared.service.ReportService;
 import com.incoresoft.dilijanCustomization.repository.FaceApiRepository;
+import com.incoresoft.dilijanCustomization.repository.VezhaDbRepository;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
@@ -31,6 +33,8 @@ class AttendanceReportServiceTest {
         props.setOutputDir(outDir.getAbsolutePath());
 
         FaceApiRepository repo = mock(FaceApiRepository.class);
+        VezhaDbRepository vezhaDbRepository = mock(VezhaDbRepository.class);
+        VezhaDbProps vezhaDbProps = new VezhaDbProps();
         ReportService reportService = mock(ReportService.class);
 
         FaceListsResponse listsResponse = new FaceListsResponse();
@@ -55,7 +59,7 @@ class AttendanceReportServiceTest {
         File generated = new File(outDir, "alpha.xlsx");
         when(reportService.exportCafeteriaPivot(any(), anyString(), anyList(), any())).thenReturn(generated);
 
-        AttendanceReportService service = new AttendanceReportService(props, repo, reportService);
+        AttendanceReportService service = new AttendanceReportService(props, repo, vezhaDbRepository, vezhaDbProps, reportService);
         File result = service.buildSingleDayReport(LocalDate.of(2024, 12, 1));
 
         assertThat(result).isEqualTo(generated);
@@ -72,5 +76,41 @@ class AttendanceReportServiceTest {
         assertThat(row.lunch()).isEqualTo(2);
         assertThat(row.dinner()).isEqualTo(2);
         assertThat(row.total()).isEqualTo(6);
+    }
+
+    @Test
+    void usesVezhaDbWhenEnabled() throws Exception {
+        CafeteriaProps props = new CafeteriaProps();
+        props.setTimezone("UTC");
+        props.setAnalyticsIds(List.of(10L));
+        File outDir = Files.createTempDirectory("cafe-db-out").toFile();
+        props.setOutputDir(outDir.getAbsolutePath());
+
+        FaceApiRepository repo = mock(FaceApiRepository.class);
+        VezhaDbRepository vezhaDbRepository = mock(VezhaDbRepository.class);
+        VezhaDbProps vezhaDbProps = new VezhaDbProps();
+        vezhaDbProps.setEnabled(true);
+        ReportService reportService = mock(ReportService.class);
+
+        FaceListDto list1 = new FaceListDto();
+        list1.setId(1L);
+        list1.setName("Alpha");
+        when(vezhaDbRepository.findListsWithAttendanceEnabled()).thenReturn(List.of(list1));
+
+        DetectionDto det = new DetectionDto();
+        ListItemDto item = new ListItemDto();
+        item.setId(100L);
+        det.setListItem(item);
+        when(vezhaDbRepository.findLatestDetectionsByListItem(eq(1L), anyList(), anyLong(), anyLong()))
+                .thenReturn(List.of(det));
+
+        File generated = new File(outDir, "alpha-db.xlsx");
+        when(reportService.exportCafeteriaPivot(any(), anyString(), anyList(), any())).thenReturn(generated);
+
+        AttendanceReportService service = new AttendanceReportService(props, repo, vezhaDbRepository, vezhaDbProps, reportService);
+        service.buildSingleDayReport(LocalDate.of(2024, 12, 1));
+
+        verifyNoInteractions(repo);
+        verify(vezhaDbRepository, atLeastOnce()).findLatestDetectionsByListItem(eq(1L), anyList(), anyLong(), anyLong());
     }
 }

@@ -6,5 +6,5 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @Data
 @ConfigurationProperties(prefix = "unknown")
 public class UnknownProps {
-    private boolean autostart = true;
+    private boolean autostart = false;
 }
