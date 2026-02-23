@@ -1,6 +1,7 @@
 package com.incoresoft.dilijanCustomization.domain.unknown.service;
 
 import com.incoresoft.dilijanCustomization.config.UnknownListRegistry;
+import com.incoresoft.dilijanCustomization.config.UnknownProps;
 import com.incoresoft.dilijanCustomization.domain.shared.dto.DetectionDto;
 import com.incoresoft.dilijanCustomization.domain.shared.dto.ListItemDto;
 import com.incoresoft.dilijanCustomization.domain.shared.dto.ListItemsResponse;
@@ -30,6 +31,7 @@ public class UnknownPersonService {
 
     private final FaceApiRepository repo;
     private final UnknownListRegistry unknownListRegistry;
+    private final UnknownProps unknownProps;
 
     // ADD flow
     public Optional<ListItemDto> handleEventAddIfUnknown(FaceEventDto event) {
@@ -40,6 +42,10 @@ public class UnknownPersonService {
 
         List<DetectionDto> candidates = fetchCandidateDetections(event);
         DetectionDto matchingDetection = findMatchingDetection(event, candidates);
+
+        if (!isDetectionSizeEligible(matchingDetection)) {
+            return Optional.empty();
+        }
 
         if (!isUniqueDetection(matchingDetection)) {
             log.info("[ADD] Skip: similar face exists in other lists (face_image={})", matchingDetection.getFaceImage());
@@ -101,6 +107,38 @@ public class UnknownPersonService {
                 .findFirst()
                 .orElseThrow(() -> new IllegalStateException(
                         "No detection with matching face_image: " + event.getFaceImage()));
+    }
+
+
+    private boolean isDetectionSizeEligible(DetectionDto detection) {
+        int cameraResolutionHeight = unknownProps.getCameraResolutionHeight();
+        int desiredImageHeight = unknownProps.getDesiredImageHeight();
+
+        if (desiredImageHeight <= 0) {
+            return true;
+        }
+
+        if (cameraResolutionHeight <= 0) {
+            log.warn("[ADD] Skip size filter: invalid cameraResolutionHeight={}", cameraResolutionHeight);
+            return true;
+        }
+
+        List<Double> box = Optional.ofNullable(detection).map(DetectionDto::getBox).orElse(List.of());
+        if (box.size() < 4 || box.get(1) == null || box.get(3) == null) {
+            log.info("[ADD] Skip: detection box is missing/invalid (detection_id={}, box={})",
+                    detection == null ? null : detection.getId(), box);
+            return false;
+        }
+
+        double boxHeightRatio = box.get(3) - box.get(1);
+        int faceHeightPixels = (int) Math.round(boxHeightRatio * cameraResolutionHeight);
+        if (faceHeightPixels < desiredImageHeight) {
+            log.info("[ADD] Skip: detection box too small (detection_id={}, face_height_px={}, min_px={})",
+                    detection.getId(), faceHeightPixels, desiredImageHeight);
+            return false;
+        }
+
+        return true;
     }
 
     private boolean isUniqueDetection(DetectionDto detection) {
