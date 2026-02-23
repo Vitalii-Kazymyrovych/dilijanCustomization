@@ -59,9 +59,9 @@ Configuration is loaded from `config/config.yaml` (not committed) with defaults 
 - `telegram.bot.*`: credentials for the polling bot.
 - `evacuation.*`: toggle/intervals for status refresh and report eligibility.
 - `vezha.cafe.*`: analytics ids, timezone, cron, excluded lists, and output directory for cafeteria XLSX.
-- `unknown.*`: whether to autostart unknown list creation/cleanup.
+- `unknown.*`: whether to autostart unknown list creation/cleanup. Unknown-list startup initialization is now opt-in (requires explicit `unknown.autostart=true`).
 - `postgres.*`: JDBC / psql settings for the evacuation status table. Invalid or blank port values now fall back to `5432` so config typos do not break report generation.
-- `vezha.db.*`: direct VEZHA PostgreSQL connection used by evacuation status/report generation to read `face_lists`, `face_list_items` (+ images), and `face_detections` without REST pagination overhead.
+- `vezha.db.*`: direct VEZHA PostgreSQL connection used by evacuation status/report generation and cafeteria attendance generation to read `face_lists`, `face_list_items` (+ images), and `face_detections` without REST pagination overhead.
 
 ## Package map
 - `web/` — REST controllers.
@@ -94,3 +94,5 @@ Configuration is loaded from `config/config.yaml` (not committed) with defaults 
 - Telegram full-name fallback lookup now includes pagination safety guards to avoid infinite loops when VEZHA list-item pagination does not advance; matching continues with the names collected so far.
 - Telegram workbook ingestion treats exact-name fallback rows with blank status as present (`true`) so operators can add only full names to mark additional people on site.
 - `UnknownPersonService` now safely handles partially populated webhook payloads (missing list/list_item nesting) and fails fast on missing event timestamps, with regression tests covering both guards.
+
+- Attendance reports now prefer VEZHA DB queries when `vezha.db.enabled=true` and only use VEZHA REST as a fallback, reducing API dependency during report generation.
