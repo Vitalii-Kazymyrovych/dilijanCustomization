@@ -26,7 +26,7 @@ See [TECHNICAL-SPEC.md](TECHNICAL-SPEC.md) for the aligned functional specificat
 - **Cafeteria attendance**: `AttendanceReportService` defines meal time windows, counts unique list item detections per meal, and passes pivot rows to `ReportService` for XLSX export. A nightly schedule can auto-run the report.
 - **Configuration & infrastructure**:
   - External config lives in `config/config.yaml` (see `config/config.yaml.example`); properties are bound via `*Props` classes and injected into the beans above.
-  - `HttpClientConfig` creates the authenticated VEZHA `RestTemplate`; `PostgresDataSourceConfig` wires HikariCP using `postgres.*` settings; `SchedulerConfig` sets a shared scheduler with centralized error handling.
+  - `HttpClientConfig` creates the authenticated VEZHA `RestTemplate`; `PostgresDataSourceConfig` wires HikariCP using `postgres.*` settings and marks the main evacuation datasource as `@Primary` so Spring Boot can always create the default JPA `entityManagerFactory` when the extra VEZHA datasource is also present; `SchedulerConfig` sets a shared scheduler with centralized error handling.
   - Evacuation DB bootstrap now ensures the `entrance_time`, `exit_time`, and `manually_updated` columns exist via `ALTER TABLE IF NOT EXISTS`, so upgrading preserves existing rows while adding new metadata.
 
 ## Key flows
