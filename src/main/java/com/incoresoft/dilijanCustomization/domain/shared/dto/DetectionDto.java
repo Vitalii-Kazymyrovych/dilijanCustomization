@@ -3,6 +3,8 @@ package com.incoresoft.dilijanCustomization.domain.shared.dto;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
 
+import java.util.List;
+
 @Data
 public class DetectionDto {
   @JsonProperty("id")
@@ -15,6 +17,8 @@ public class DetectionDto {
     private ListItemDto listItem;
     @JsonProperty("face_image")
     private String faceImage;
+    @JsonProperty("box")
+    private List<Double> box;
     @Data
   public static class AnalyticsRef {
       @JsonProperty("id")
@@ -23,4 +27,3 @@ public class DetectionDto {
       private Long streamId;
   }
 }
-

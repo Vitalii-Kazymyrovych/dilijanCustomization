@@ -38,3 +38,5 @@
 - Marked the primary evacuation PostgreSQL `DataSource` bean with `@Primary` in `PostgresDataSourceConfig` so Spring Boot can build the default JPA `entityManagerFactory` alongside the separate VEZHA datasource; updated README and re-ran tests.
 - Switched `AttendanceReportService` to read face lists and detections from `VezhaDbRepository` when `vezha.db.enabled=true` (API remains fallback), added DB-path unit coverage, and made excluded-list handling null-safe.
 - Changed unknown list startup initializer to be opt-in when `unknown.autostart=true` is explicitly set, preventing unexpected API calls when config is missing.
+- Added unknown-person auto-add size filtering using detection `box` height (pixel-converted via new `unknown.camera-resolution-height` and `unknown.desired-image-height` config), extended DTO/test coverage, and updated README/config example.
+

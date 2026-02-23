@@ -1,6 +1,7 @@
 package com.incoresoft.dilijanCustomization.domain.unknown.service;
 
 import com.incoresoft.dilijanCustomization.config.UnknownListRegistry;
+import com.incoresoft.dilijanCustomization.config.UnknownProps;
 import com.incoresoft.dilijanCustomization.domain.shared.dto.DetectionDto;
 import com.incoresoft.dilijanCustomization.domain.shared.dto.DetectionsResponse;
 import com.incoresoft.dilijanCustomization.domain.shared.dto.ListItemDto;
@@ -35,6 +36,9 @@ class UnknownPersonServiceTest {
     @Mock
     private UnknownListRegistry unknownListRegistry;
 
+    @Mock
+    private UnknownProps unknownProps;
+
     @InjectMocks
     private UnknownPersonService service;
 
@@ -53,6 +57,10 @@ class UnknownPersonServiceTest {
 
         ListItemDto created = new ListItemDto();
         created.setId(999L);
+
+        when(unknownProps.getCameraResolutionHeight()).thenReturn(1080);
+        when(unknownProps.getDesiredImageHeight()).thenReturn(120);
+        detection.setBox(List.of(0.1, 0.1, 0.2, 0.3));
 
         when(unknownListRegistry.get()).thenReturn(10L);
         when(repository.getRecentDetections(eq(100), eq("asc"), anyLong(), anyLong())).thenReturn(detectionsResponse);
@@ -109,6 +117,29 @@ class UnknownPersonServiceTest {
         Optional<ListItemDto> result = service.handleEventAddIfUnknown(event);
 
         assertThat(result).isEmpty();
+        verify(repository, never()).createListItemFromDetection(any());
+    }
+
+
+    @Test
+    void handleEventAddIfUnknownSkipsWhenDetectionBoxHeightTooSmall() {
+        FaceEventDto event = buildEvent(false, null, null, "face-image");
+        DetectionDto detection = new DetectionDto();
+        detection.setId(500L);
+        detection.setFaceImage("face-image");
+        detection.setBox(List.of(0.1, 0.1, 0.2, 0.15));
+
+        DetectionsResponse detectionsResponse = new DetectionsResponse();
+        detectionsResponse.setData(List.of(detection));
+
+        when(unknownProps.getCameraResolutionHeight()).thenReturn(1080);
+        when(unknownProps.getDesiredImageHeight()).thenReturn(120);
+        when(repository.getRecentDetections(eq(100), eq("asc"), anyLong(), anyLong())).thenReturn(detectionsResponse);
+
+        Optional<ListItemDto> result = service.handleEventAddIfUnknown(event);
+
+        assertThat(result).isEmpty();
+        verify(repository, never()).downloadStorageObject(any());
         verify(repository, never()).createListItemFromDetection(any());
     }
 

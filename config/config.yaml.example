@@ -47,6 +47,10 @@ evacuation:
 unknown:
   # matches @ConfigurationProperties(prefix="unknown")
   autostart: false
+  # camera frame height in pixels (used for detection box -> pixel conversion)
+  camera-resolution-height: 1080
+  # minimum acceptable face box height in pixels for auto-generated unknowns
+  desired-image-height: 120
 
 # ====== PostgreSQL ======
 postgres:

@@ -13,7 +13,7 @@ See [TECHNICAL-SPEC.md](TECHNICAL-SPEC.md) for the aligned functional specificat
 - **VEZHA integration**: `FaceApiRepository` wraps all VEZHA calls (detections, list CRUD, storage downloads). Higher-level services rely on it for analytics queries, unknown person management, and pulling list metadata/images.
   - Detection queries send a multipart request that always contains an empty `image` part with a non-blank filename (matching the VEZHA Swagger contract) even when filtering without an uploaded file.
 - **Unknown-person pipeline**: `UnknownListInitializer` ensures a dedicated face list exists at startup and records its id in `UnknownListRegistry`. `UnknownPersonService` then:
-  - searches recent detections around a webhook event, downloads the detection thumbnail, probes `/face/list_items/search_by_photo` (multipart image, confidence=90) to ensure no similar faces already exist, and only then creates a list item;
+  - searches recent detections around a webhook event, enforces a minimum face-box pixel height using detection `box` coordinates (`unknown.camera-resolution-height` + `unknown.desired-image-height`), downloads the detection thumbnail, probes `/face/list_items/search_by_photo` (multipart image, confidence=90) to ensure no similar faces already exist, and only then creates a list item;
   - deletes items when VEZHA signals removal;
   - performs weekly cleanup of the unknown list.
   - Startup list initialization now logs and skips if VEZHA returns an invalid response (e.g., invalid Content-Type), preventing the application from failing on boot.
@@ -59,7 +59,7 @@ Configuration is loaded from `config/config.yaml` (not committed) with defaults 
 - `telegram.bot.*`: credentials for the polling bot.
 - `evacuation.*`: toggle/intervals for status refresh and report eligibility.
 - `vezha.cafe.*`: analytics ids, timezone, cron, excluded lists, and output directory for cafeteria XLSX.
-- `unknown.*`: whether to autostart unknown list creation/cleanup. Unknown-list startup initialization is now opt-in (requires explicit `unknown.autostart=true`).
+- `unknown.*`: whether to autostart unknown list creation/cleanup. Unknown-list startup initialization is now opt-in (requires explicit `unknown.autostart=true`). It also includes `camera-resolution-height` and `desired-image-height` to filter out too-small auto-generated unknown face crops based on detection box size.
 - `postgres.*`: JDBC / psql settings for the evacuation status table. Invalid or blank port values now fall back to `5432` so config typos do not break report generation.
 - `vezha.db.*`: direct VEZHA PostgreSQL connection used by evacuation status/report generation and cafeteria attendance generation to read `face_lists`, `face_list_items` (+ images), and `face_detections` without REST pagination overhead.
 
@@ -93,6 +93,6 @@ Configuration is loaded from `config/config.yaml` (not committed) with defaults 
 - Search-by-photo errors now log the HTTP status/response summary (without stack traces) so operators immediately see VEZHA’s reason, such as `ERROR_NO_FACES_DETECTED`.
 - Telegram full-name fallback lookup now includes pagination safety guards to avoid infinite loops when VEZHA list-item pagination does not advance; matching continues with the names collected so far.
 - Telegram workbook ingestion treats exact-name fallback rows with blank status as present (`true`) so operators can add only full names to mark additional people on site.
-- `UnknownPersonService` now safely handles partially populated webhook payloads (missing list/list_item nesting) and fails fast on missing event timestamps, with regression tests covering both guards.
+- `UnknownPersonService` now safely handles partially populated webhook payloads (missing list/list_item nesting), fails fast on missing event timestamps, and filters out detections whose box height resolves below the configured minimum pixel threshold, with regression tests covering the guards and size filter.
 
 - Attendance reports now prefer VEZHA DB queries when `vezha.db.enabled=true` and only use VEZHA REST as a fallback, reducing API dependency during report generation.
