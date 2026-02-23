@@ -19,6 +19,16 @@ vezha:
     schedule-cron: "0 0 22 * * *"
     excluded-list-names: ["outsourced"]
 
+
+  db:
+    enabled: false
+    host: "localhost"
+    port: "5432"
+    database: "videoanalytics"
+    schema: "videoanalytics"
+    username: "postgres"
+    password: "postgres"
+
 # ====== Telegram ======
 telegram:
   bot:

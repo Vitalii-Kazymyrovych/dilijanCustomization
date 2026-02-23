@@ -7,31 +7,25 @@ import com.incoresoft.dilijanCustomization.domain.evacuation.dto.EvacuationStatu
 import com.incoresoft.dilijanCustomization.domain.shared.dto.DetectionDto;
 import com.incoresoft.dilijanCustomization.domain.shared.dto.FaceListDto;
 import com.incoresoft.dilijanCustomization.domain.shared.dto.ListItemDto;
-import com.incoresoft.dilijanCustomization.domain.shared.dto.ListItemsResponse;
 import com.incoresoft.dilijanCustomization.domain.shared.dto.TimeAttendance;
 import com.incoresoft.dilijanCustomization.repository.EvacuationStatusRepository;
-import com.incoresoft.dilijanCustomization.repository.FaceApiRepository;
+import com.incoresoft.dilijanCustomization.repository.VezhaDbRepository;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anyList;
-import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 class EvacuationStatusServiceTest {
 
     @Test
     void getActiveListItemIdsReturnsEmptyOnError() {
-        FaceApiRepository repo = mock(FaceApiRepository.class);
+        VezhaDbRepository repo = mock(VezhaDbRepository.class);
         EvacuationProps props = new EvacuationProps();
         PostgresProps postgresProps = new PostgresProps();
         EvacuationStatusRepository statusRepo = mock(EvacuationStatusRepository.class);
@@ -45,7 +39,7 @@ class EvacuationStatusServiceTest {
 
     @Test
     void updateStatusInsertsWhenMissing() {
-        FaceApiRepository repo = mock(FaceApiRepository.class);
+        VezhaDbRepository repo = mock(VezhaDbRepository.class);
         EvacuationProps props = new EvacuationProps();
         PostgresProps postgresProps = new PostgresProps();
         EvacuationStatusRepository statusRepo = mock(EvacuationStatusRepository.class);
@@ -66,37 +60,28 @@ class EvacuationStatusServiceTest {
     }
 
     @Test
-    void fetchListItemsPaginatesThroughAllPages() {
-        FaceApiRepository repo = mock(FaceApiRepository.class);
+    void fetchListItemsReadsFromDbRepository() {
+        VezhaDbRepository repo = mock(VezhaDbRepository.class);
         EvacuationProps props = new EvacuationProps();
         PostgresProps postgresProps = new PostgresProps();
         EvacuationStatusRepository statusRepo = mock(EvacuationStatusRepository.class);
         EvacuationStatusService service = new EvacuationStatusService(repo, props, postgresProps, statusRepo);
 
-        ListItemsResponse firstPage = new ListItemsResponse();
-        firstPage.setTotal(1200);
-        firstPage.setData(buildListItems(1000, 1));
-
-        ListItemsResponse secondPage = new ListItemsResponse();
-        secondPage.setTotal(1200);
-        secondPage.setData(buildListItems(200, 1001));
-
-        when(repo.getListItems(eq(1L), anyString(), anyString(), eq(0), eq(1000), anyString(), anyString()))
-                .thenReturn(firstPage);
-        when(repo.getListItems(eq(1L), anyString(), anyString(), eq(1000), eq(1000), anyString(), anyString()))
-                .thenReturn(secondPage);
+        ListItemDto first = new ListItemDto();
+        first.setId(1L);
+        ListItemDto second = new ListItemDto();
+        second.setId(2L);
+        when(repo.findListItems(1L)).thenReturn(List.of(first, second));
 
         @SuppressWarnings("unchecked")
         List<ListItemDto> items = ReflectionTestUtils.invokeMethod(service, "fetchListItems", 1L);
 
-        assertThat(items).hasSize(1200);
-        assertThat(items.getFirst().getId()).isEqualTo(1L);
-        assertThat(items.getLast().getId()).isEqualTo(1200L);
+        assertThat(items).extracting(ListItemDto::getId).containsExactly(1L, 2L);
     }
 
     @Test
     void manualStatusSkipsRefreshWhenNoNewDetection() {
-        FaceApiRepository repo = mock(FaceApiRepository.class);
+        VezhaDbRepository repo = mock(VezhaDbRepository.class);
         EvacuationProps props = new EvacuationProps();
         PostgresProps postgresProps = new PostgresProps();
         EvacuationStatusRepository statusRepo = mock(EvacuationStatusRepository.class);
@@ -108,11 +93,7 @@ class EvacuationStatusServiceTest {
 
         ListItemDto item = new ListItemDto();
         item.setId(5L);
-        ListItemsResponse listItemsResponse = new ListItemsResponse();
-        listItemsResponse.setData(List.of(item));
-        listItemsResponse.setTotal(1);
-        when(repo.getListItems(eq(1L), anyString(), anyString(), eq(0), eq(1000), anyString(), anyString()))
-                .thenReturn(listItemsResponse);
+        when(repo.findListItems(1L)).thenReturn(List.of(item));
 
         DetectionDto detection = new DetectionDto();
         detection.setTimestamp(123L);
@@ -122,7 +103,7 @@ class EvacuationStatusServiceTest {
         ListItemDto detectedItem = new ListItemDto();
         detectedItem.setId(5L);
         detection.setListItem(detectedItem);
-        when(repo.getAllDetectionsInWindow(eq(1L), anyList(), anyLong(), anyLong(), anyInt()))
+        when(repo.findLatestDetectionsByListItem(eq(1L), anyList(), anyLong(), anyLong()))
                 .thenReturn(List.of(detection));
 
         EvacuationStatus existing = new EvacuationStatus();
@@ -142,16 +123,5 @@ class EvacuationStatusServiceTest {
         assertThat(saved.getStatus()).isFalse();
         assertThat(saved.getManuallyUpdated()).isTrue();
         assertThat(saved.getEntranceTime()).isEqualTo(123L);
-    }
-
-    private static List<ListItemDto> buildListItems(int count, long startingId) {
-        List<ListItemDto> items = new ArrayList<>();
-        for (int i = 0; i < count; i++) {
-            ListItemDto dto = new ListItemDto();
-            dto.setId(startingId + i);
-            dto.setName("Person " + dto.getId());
-            items.add(dto);
-        }
-        return items;
     }
 }

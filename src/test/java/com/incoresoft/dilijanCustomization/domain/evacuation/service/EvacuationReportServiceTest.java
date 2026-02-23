@@ -4,9 +4,8 @@ import com.incoresoft.dilijanCustomization.domain.evacuation.dto.EvacuationRepor
 import com.incoresoft.dilijanCustomization.domain.evacuation.dto.EvacuationStatus;
 import com.incoresoft.dilijanCustomization.domain.shared.dto.FaceListDto;
 import com.incoresoft.dilijanCustomization.domain.shared.dto.ListItemDto;
-import com.incoresoft.dilijanCustomization.domain.shared.dto.ListItemsResponse;
 import com.incoresoft.dilijanCustomization.domain.shared.service.ReportService;
-import com.incoresoft.dilijanCustomization.repository.FaceApiRepository;
+import com.incoresoft.dilijanCustomization.repository.VezhaDbRepository;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -18,16 +17,14 @@ import java.time.ZoneId;
 import java.util.*;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.doNothing;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
 
 class EvacuationReportServiceTest {
 
     @Test
     void buildsReportWithActiveStatusesOnly() throws Exception {
-        FaceApiRepository repo = mock(FaceApiRepository.class);
+        VezhaDbRepository repo = mock(VezhaDbRepository.class);
         ReportService reportService = mock(ReportService.class);
         EvacuationStatusService statusService = mock(EvacuationStatusService.class);
         doNothing().when(statusService).refreshStatuses();
@@ -39,20 +36,15 @@ class EvacuationReportServiceTest {
         list2.setId(2L);
         list2.setName("List 2");
 
-        var listsResponse = new com.incoresoft.dilijanCustomization.domain.shared.dto.FaceListsResponse();
-        listsResponse.setData(List.of(list1, list2));
-        when(repo.getFaceLists(100)).thenReturn(listsResponse);
+        when(repo.findFaceList(1L)).thenReturn(list1);
+        when(repo.findFaceList(2L)).thenReturn(list2);
 
         ListItemDto activeItem = new ListItemDto();
         activeItem.setId(10L);
         activeItem.setName("Active");
 
-        ListItemsResponse itemsResponse = new ListItemsResponse();
-        itemsResponse.setData(List.of(activeItem));
-        when(repo.getListItems(eq(1L), anyString(), anyString(), anyInt(), anyInt(), anyString(), anyString()))
-                .thenReturn(itemsResponse);
-        when(repo.getListItems(eq(2L), anyString(), anyString(), anyInt(), anyInt(), anyString(), anyString()))
-                .thenReturn(itemsResponse);
+        when(repo.findListItems(1L)).thenReturn(List.of(activeItem));
+        when(repo.findListItems(2L)).thenReturn(List.of(activeItem));
 
         EvacuationStatus status = new EvacuationStatus();
         status.setListId(1L);
@@ -78,7 +70,7 @@ class EvacuationReportServiceTest {
 
     @Test
     void parsesPresenceCsvAndResolvesPresentNames() {
-        FaceApiRepository repo = mock(FaceApiRepository.class);
+        VezhaDbRepository repo = mock(VezhaDbRepository.class);
         ReportService reportService = mock(ReportService.class);
         EvacuationStatusService statusService = mock(EvacuationStatusService.class);
         EvacuationReportService service = new EvacuationReportService(repo, reportService, statusService);
@@ -95,7 +87,7 @@ class EvacuationReportServiceTest {
 
     @Test
     void parsesHumanReadableDates() {
-        FaceApiRepository repo = mock(FaceApiRepository.class);
+        VezhaDbRepository repo = mock(VezhaDbRepository.class);
         ReportService reportService = mock(ReportService.class);
         EvacuationStatusService statusService = mock(EvacuationStatusService.class);
         EvacuationReportService service = new EvacuationReportService(repo, reportService, statusService);

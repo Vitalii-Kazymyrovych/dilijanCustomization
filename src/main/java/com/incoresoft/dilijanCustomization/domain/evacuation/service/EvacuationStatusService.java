@@ -6,11 +6,9 @@ import com.incoresoft.dilijanCustomization.domain.evacuation.dto.EvacuationStatu
 import com.incoresoft.dilijanCustomization.domain.evacuation.dto.EvacuationStatusPK;
 import com.incoresoft.dilijanCustomization.domain.shared.dto.DetectionDto;
 import com.incoresoft.dilijanCustomization.domain.shared.dto.FaceListDto;
-import com.incoresoft.dilijanCustomization.domain.shared.dto.FaceListsResponse;
 import com.incoresoft.dilijanCustomization.domain.shared.dto.ListItemDto;
-import com.incoresoft.dilijanCustomization.domain.shared.dto.ListItemsResponse;
 import com.incoresoft.dilijanCustomization.repository.EvacuationStatusRepository;
-import com.incoresoft.dilijanCustomization.repository.FaceApiRepository;
+import com.incoresoft.dilijanCustomization.repository.VezhaDbRepository;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -40,11 +38,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Slf4j
 public class EvacuationStatusService {
-    private static final int DEFAULT_FACE_LIST_LIMIT = 100;
-    private static final int DEFAULT_DETECTION_PAGE_LIMIT = 500;
-    private static final int LIST_ITEM_PAGE_LIMIT = 1000;
-
-    private final FaceApiRepository repo;
+    private final VezhaDbRepository vezhaDbRepository;
     private final EvacuationProps evacuationProps;
     private final PostgresProps postgresProps;
     /** JPA репозиторий для сохранения и обновления статусов. */
@@ -128,12 +122,11 @@ public class EvacuationStatusService {
             return;
         }
 
-        List<DetectionDto> detections = repo.getAllDetectionsInWindow(
+        List<DetectionDto> detections = vezhaDbRepository.findLatestDetectionsByListItem(
                 faceList.getId(),
                 attendanceConfig.allStreams(),
                 startMillis,
-                endMillis,
-                DEFAULT_DETECTION_PAGE_LIMIT
+                endMillis
         );
 
         Map<Long, DetectionDto> latestByPerson = findLatestDetections(detections);
@@ -243,14 +236,7 @@ public class EvacuationStatusService {
 
     private List<FaceListDto> fetchListsWithAttendanceEnabled() {
         try {
-            FaceListsResponse response = repo.getFaceLists(DEFAULT_FACE_LIST_LIMIT);
-            if (response == null || response.getData() == null) {
-                return List.of();
-            }
-            return response.getData().stream()
-                    .filter(list -> list.getTimeAttendance() != null)
-                    .filter(list -> Boolean.TRUE.equals(list.getTimeAttendance().getEnabled()))
-                    .toList();
+            return vezhaDbRepository.findListsWithAttendanceEnabled();
         } catch (Exception e) {
             log.warn("[EVAC] VEZHA API unavailable, skipping refresh: {}", e.getMessage());
             return List.of();
@@ -264,21 +250,7 @@ public class EvacuationStatusService {
     }
 
     private List<ListItemDto> fetchListItems(Long listId) {
-        List<ListItemDto> allItems = new ArrayList<>();
-        int offset = 0;
-        while (true) {
-            ListItemsResponse response = repo.getListItems(listId, "", "", offset, LIST_ITEM_PAGE_LIMIT, "asc", "name");
-            if (response == null || response.getData() == null || response.getData().isEmpty()) {
-                break;
-            }
-            allItems.addAll(response.getData());
-            offset += LIST_ITEM_PAGE_LIMIT;
-            Integer total = response.getTotal();
-            if (response.getData().size() < LIST_ITEM_PAGE_LIMIT || (total != null && allItems.size() >= total)) {
-                break;
-            }
-        }
-        return allItems;
+        return vezhaDbRepository.findListItems(listId);
     }
 
     private Map<Long, DetectionDto> findLatestDetections(List<DetectionDto> detections) {

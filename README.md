@@ -17,7 +17,7 @@ See [TECHNICAL-SPEC.md](TECHNICAL-SPEC.md) for the aligned functional specificat
   - deletes items when VEZHA signals removal;
   - performs weekly cleanup of the unknown list.
   - Startup list initialization now logs and skips if VEZHA returns an invalid response (e.g., invalid Content-Type), preventing the application from failing on boot.
-- **Evacuation domain**: `EvacuationStatusService` periodically pulls detections for time-attendance-enabled lists, determines who last entered vs. exited, and persists statuses via `EvacuationStatusRepository` (PostgreSQL). `EvacuationReportService` refreshes statuses and assembles an XLSX workbook through `ReportService`, which embeds photos and exports the status column as ☑/☐ symbols with validation so Google Sheets renders checkboxes (checked by default).
+- **Evacuation domain**: `EvacuationStatusService` now reads time-attendance-enabled lists, list items, and latest detections directly from VEZHA PostgreSQL (`videoanalytics.*` tables), determines who last entered vs. exited, and persists statuses via `EvacuationStatusRepository` in the local evacuation PostgreSQL. `EvacuationReportService` refreshes statuses and assembles an XLSX workbook through `ReportService`, which embeds photos and exports the status column as ☑/☐ symbols with validation so Google Sheets renders checkboxes (checked by default).
   - The evacuation status table stores the timestamps of the last entrance and exit detections per person (`entrance_time`, `exit_time`) plus a `manually_updated` flag so manual overrides are preserved until a newer detection arrives.
   - Evacuation status refresh paginates through all list items, so lists with more than 1000 people still update statuses correctly.
   - Telegram uploads of evacuation workbooks now read the list item ID from the dedicated “ID” column (column 3) produced by `ReportService`, so evacuation status updates line up with the exported report.
@@ -36,7 +36,7 @@ See [TECHNICAL-SPEC.md](TECHNICAL-SPEC.md) for the aligned functional specificat
   3. The service queries detections near the timestamp, resolves/creates the unknown list item, or deletes it when appropriate.
 - **Evacuation report**
   1. A request to `/evacuation/report?listIds=...` or a Telegram callback triggers `EvacuationReportService`.
-  2. The service asks `EvacuationStatusService` to recompute statuses (using VEZHA detections) and load active list item ids from PostgreSQL, including each person’s most recent entrance time.
+  2. The service asks `EvacuationStatusService` to recompute statuses using VEZHA DB detections/lists and load active list item ids from the evacuation DB, including each person’s most recent entrance time.
   3. `ReportService` builds one sheet per list with status checkboxes (☑/☐ symbol cells for Google Sheets), entrance time column, and embedded photos; the controller streams it as XLSX.
 - **Cafeteria attendance report**
   1. Scheduler or `/cafeteria/build` triggers `AttendanceReportService`.
@@ -61,11 +61,12 @@ Configuration is loaded from `config/config.yaml` (not committed) with defaults 
 - `vezha.cafe.*`: analytics ids, timezone, cron, excluded lists, and output directory for cafeteria XLSX.
 - `unknown.*`: whether to autostart unknown list creation/cleanup.
 - `postgres.*`: JDBC / psql settings for the evacuation status table. Invalid or blank port values now fall back to `5432` so config typos do not break report generation.
+- `vezha.db.*`: direct VEZHA PostgreSQL connection used by evacuation status/report generation to read `face_lists`, `face_list_items` (+ images), and `face_detections` without REST pagination overhead.
 
 ## Package map
 - `web/` — REST controllers.
 - `telegram/` — Telegram bot integration.
-- `repository/` — VEZHA REST client and JPA repository for evacuation statuses.
+- `repository/` — VEZHA REST client, VEZHA DB reader for evacuation data, and JPA repository for evacuation statuses.
 - `domain/**/service` — domain services for evacuation, attendance, unknown-person flows, and shared reporting.
 - `domain/**/dto` — DTOs exchanged with VEZHA and report builders.
 - `config/` — property holders and infrastructure beans (HTTP client, scheduling, datasource, Telegram, unknown list registry).
