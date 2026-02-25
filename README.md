@@ -19,6 +19,7 @@ See [TECHNICAL-SPEC.md](TECHNICAL-SPEC.md) for the aligned functional specificat
   - Startup list initialization now logs and skips if VEZHA returns an invalid response (e.g., invalid Content-Type), preventing the application from failing on boot.
 - **Evacuation domain**: `EvacuationStatusService` now reads time-attendance-enabled lists, list items, and latest detections directly from VEZHA PostgreSQL (`videoanalytics.*` tables), determines who last entered vs. exited, and persists statuses via `EvacuationStatusRepository` in the local evacuation PostgreSQL. `EvacuationReportService` refreshes statuses and assembles an XLSX workbook through `ReportService`, which embeds photos and exports the status column as ☑/☐ symbols with validation so Google Sheets renders checkboxes (checked by default).
   - The evacuation status table stores the timestamps of the last entrance and exit detections per person (`entrance_time`, `exit_time`) plus a `manually_updated` flag so manual overrides are preserved until a newer detection arrives.
+  - Evacuation XLSX exports now include a dedicated “Manually updated” column so operators can immediately see which on-site rows came from manual overrides.
   - Evacuation status refresh paginates through all list items, so lists with more than 1000 people still update statuses correctly.
   - Telegram uploads of evacuation workbooks now read the list item ID from the dedicated “ID” column (column 3) produced by `ReportService`, so evacuation status updates line up with the exported report.
   - If the ID column is empty, Telegram upload parsing now falls back to the “Name” column and resolves people by exact full-name match within the same list; when such a row has no explicit status value, it is treated as “On site” (present) so adding names alone works for manual additions.
@@ -37,7 +38,7 @@ See [TECHNICAL-SPEC.md](TECHNICAL-SPEC.md) for the aligned functional specificat
 - **Evacuation report**
   1. A request to `/evacuation/report?listIds=...` or a Telegram callback triggers `EvacuationReportService`.
   2. The service asks `EvacuationStatusService` to recompute statuses using VEZHA DB detections/lists and load active list item ids from the evacuation DB, including each person’s most recent entrance time.
-  3. `ReportService` builds one sheet per list with status checkboxes (☑/☐ symbol cells for Google Sheets), entrance time column, and embedded photos; the controller streams it as XLSX.
+  3. `ReportService` builds one sheet per list with status checkboxes (☑/☐ symbol cells for Google Sheets), entrance time column, a manual-update marker column, and embedded photos; the controller streams it as XLSX.
 - **Cafeteria attendance report**
   1. Scheduler or `/cafeteria/build` triggers `AttendanceReportService`.
   2. Detections are pulled for configured analytics IDs and time windows; unique person counts per meal/list are calculated.

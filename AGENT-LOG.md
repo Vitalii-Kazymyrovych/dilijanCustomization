@@ -1,3 +1,4 @@
+- Added a “Manually updated” indicator column to evacuation XLSX reports, wired the flag through `EvacuationReportRow`/`EvacuationReportService`, updated related report tests, and refreshed README.
 - Added comprehensive unit tests for reporting, evacuation, unknown list initialization, and VEZHA client pagination to improve coverage.
 - Declared missing dependencies (commons-lang3, mockito-inline) required by the codebase and tests.
 - Documented the expanded test suite and execution notes in README.

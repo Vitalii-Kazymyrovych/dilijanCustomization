@@ -33,6 +33,7 @@ public class ReportService {
     private static final int COL_WIDTH_PHOTO   = 30 * 256;
     private static final int COL_WIDTH_NAME    = 50 * 256;
     private static final int COL_WIDTH_COMMENT = 50 * 256;
+    private static final int COL_WIDTH_MANUAL  = 30 * 256;
     /** Width of the ID column in characters (scaled by 256 for POI). */
     private static final int COL_WIDTH_ID      = 20 * 256;
     private static final String CHECKBOX_CHECKED = "☑";
@@ -120,7 +121,7 @@ public class ReportService {
                 );
                 Sheet sh = wb.createSheet(sheetName);
 
-                // Header: Status, Entrance time, Photo, ID, Name, Comment
+                // Header: Status, Entrance time, Photo, ID, Name, Comment, Manually updated
                 Row header = sh.createRow(0);
                 header.createCell(0).setCellValue("Status");
                 header.createCell(1).setCellValue("Entrance time");
@@ -128,6 +129,7 @@ public class ReportService {
                 header.createCell(3).setCellValue("ID");
                 header.createCell(4).setCellValue("Name");
                 header.createCell(5).setCellValue("Comment");
+                header.createCell(6).setCellValue("Manually updated");
 
                 sh.setDefaultRowHeightInPoints(ROW_HEIGHT_PT);
                 sh.setColumnWidth(0, COL_WIDTH_CHECKBOX);
@@ -136,6 +138,7 @@ public class ReportService {
                 sh.setColumnWidth(3, COL_WIDTH_ID);
                 sh.setColumnWidth(4, COL_WIDTH_NAME);
                 sh.setColumnWidth(5, COL_WIDTH_COMMENT);
+                sh.setColumnWidth(6, COL_WIDTH_MANUAL);
                 header.setHeightInPoints(24f);
 
                 Drawing<?> drawing = sh.createDrawingPatriarch();
@@ -186,6 +189,9 @@ public class ReportService {
 
                     // Comment
                     row.createCell(5).setCellValue(nullSafe(item.getComment()));
+
+                    // Manual status marker (informational only, Telegram parser ignores this column)
+                    row.createCell(6).setCellValue(rowData.manuallyUpdated() ? "Manually updated" : "");
 
                     r++;
                 }
