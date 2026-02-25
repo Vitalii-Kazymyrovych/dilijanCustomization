@@ -492,10 +492,7 @@ public class TelegramBot extends TelegramLongPollingBot {
                     listItemId = resolveListItemIdByName(row.getCell(REPORT_COL_NAME), listNameToId);
                     resolvedByName = listItemId != null;
                 }
-                if (status == null && resolvedByName) {
-                    status = true;
-                }
-                if (status != null && listItemId != null) {
+                if (status != null && listItemId != null && !status) {
                     updates.add(new EvacuationUpdate(listId, listItemId, status));
                 }
             }

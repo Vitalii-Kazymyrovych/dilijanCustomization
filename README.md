@@ -15,14 +15,14 @@ See [TECHNICAL-SPEC.md](TECHNICAL-SPEC.md) for the aligned functional specificat
 - **Unknown-person pipeline**: `UnknownListInitializer` ensures a dedicated face list exists at startup and records its id in `UnknownListRegistry`. `UnknownPersonService` then:
   - searches recent detections around a webhook event, enforces a minimum face-box pixel height using detection `box` coordinates (`unknown.camera-resolution-height` + `unknown.desired-image-height`), downloads the detection thumbnail, probes `/face/list_items/search_by_photo` (multipart image, confidence=90) to ensure no similar faces already exist, and only then creates a list item;
   - deletes items when VEZHA signals removal;
-  - performs weekly cleanup of the unknown list.
+  - applies a 24-hour retention policy for auto-generated unknown entries (identified by `comment=auto-unknown`) and deletes expired entries during scheduled cleanup runs.
   - Startup list initialization now logs and skips if VEZHA returns an invalid response (e.g., invalid Content-Type), preventing the application from failing on boot.
 - **Evacuation domain**: `EvacuationStatusService` now reads time-attendance-enabled lists, list items, and latest detections directly from VEZHA PostgreSQL (`videoanalytics.*` tables), determines who last entered vs. exited, and persists statuses via `EvacuationStatusRepository` in the local evacuation PostgreSQL. `EvacuationReportService` refreshes statuses and assembles an XLSX workbook through `ReportService`, which embeds photos and exports the status column as ☑/☐ symbols with validation so Google Sheets renders checkboxes (checked by default).
   - The evacuation status table stores the timestamps of the last entrance and exit detections per person (`entrance_time`, `exit_time`) plus a `manually_updated` flag so manual overrides are preserved until a newer detection arrives.
   - Evacuation XLSX exports now include a dedicated “Manually updated” column so operators can immediately see which on-site rows came from manual overrides.
   - Evacuation status refresh paginates through all list items, so lists with more than 1000 people still update statuses correctly.
   - Telegram uploads of evacuation workbooks now read the list item ID from the dedicated “ID” column (column 3) produced by `ReportService`, so evacuation status updates line up with the exported report.
-  - If the ID column is empty, Telegram upload parsing now falls back to the “Name” column and resolves people by exact full-name match within the same list; when such a row has no explicit status value, it is treated as “On site” (present) so adding names alone works for manual additions.
+  - If the ID column is empty, Telegram upload parsing can still fall back to exact full-name matching within the same list, but only rows explicitly marked as unchecked (`false`) are applied, so workbook uploads can remove people from the active evacuation set without adding new active rows.
   - Telegram workbook import now also guards list-item pagination while building the full-name lookup, so uploads still complete even if VEZHA repeats the same full page and ignores pagination offsets.
 - **Cafeteria attendance**: `AttendanceReportService` defines meal time windows, counts unique list item detections per meal, and passes pivot rows to `ReportService` for XLSX export. A nightly schedule can auto-run the report.
 - **Configuration & infrastructure**:
@@ -50,7 +50,7 @@ See [TECHNICAL-SPEC.md](TECHNICAL-SPEC.md) for the aligned functional specificat
   - `POST /cafeteria/build?date=YYYY-MM-DD[&timezone=TZ][&listIds=1,2]` — write a per-day attendance report to disk and return its path.
   - `GET  /evacuation/report?listIds=1,2` — download a multi-list evacuation XLSX.
 - **Schedulers** (respect `spring.task.scheduling.enabled`):
-  - Unknown list cleanup: Sundays at midnight (`UnknownPersonService`).
+  - Unknown list cleanup: hourly (`UnknownPersonService`), removing only expired auto-generated unknown entries (24h retention).
   - Cafeteria report generation: cron from `vezha.cafe.schedule-cron` in the configured timezone.
   - Evacuation status refresh: every `evacuation.refreshMinutes` minutes.
 
@@ -93,7 +93,7 @@ Configuration is loaded from `config/config.yaml` (not committed) with defaults 
 - Evacuation report generation now fails fast if the status query throws, instead of sending an empty workbook when the PostgreSQL connection is misconfigured.
 - Search-by-photo errors now log the HTTP status/response summary (without stack traces) so operators immediately see VEZHA’s reason, such as `ERROR_NO_FACES_DETECTED`.
 - Telegram full-name fallback lookup now includes pagination safety guards to avoid infinite loops when VEZHA list-item pagination does not advance; matching continues with the names collected so far.
-- Telegram workbook ingestion treats exact-name fallback rows with blank status as present (`true`) so operators can add only full names to mark additional people on site.
+- Telegram workbook ingestion now applies only explicit `false` (unchecked) status rows, including exact-name fallback rows, so uploads support removals only and no longer add people as present.
 - `UnknownPersonService` now safely handles partially populated webhook payloads (missing list/list_item nesting), fails fast on missing event timestamps, and filters out detections whose box height resolves below the configured minimum pixel threshold, with regression tests covering the guards and size filter.
 
 - Attendance reports now prefer VEZHA DB queries when `vezha.db.enabled=true` and only use VEZHA REST as a fallback, reducing API dependency during report generation.

@@ -41,3 +41,6 @@
 - Changed unknown list startup initializer to be opt-in when `unknown.autostart=true` is explicitly set, preventing unexpected API calls when config is missing.
 - Added unknown-person auto-add size filtering using detection `box` height (pixel-converted via new `unknown.camera-resolution-height` and `unknown.desired-image-height` config), extended DTO/test coverage, and updated README/config example.
 
+- Removed evacuation workbook “manual add” behavior by accepting only explicit unchecked (`false`) status rows during Telegram import (including exact-name fallback), so uploads now support removals only.
+- Reworked unknown auto-generated retention: cleanup now runs hourly, keeps non-auto entries untouched, and deletes only `comment=auto-unknown` items older than 24 hours using list-item `created_at`; added DTO parsing and regression tests.
+- Updated README to document the evacuation-import restriction and the new 24-hour unknown retention policy.
