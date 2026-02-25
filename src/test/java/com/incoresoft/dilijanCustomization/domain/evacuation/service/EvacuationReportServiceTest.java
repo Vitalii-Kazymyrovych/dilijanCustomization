@@ -50,6 +50,7 @@ class EvacuationReportServiceTest {
         status.setListId(1L);
         status.setListItemId(10L);
         status.setEntranceTime(123L);
+        status.setManuallyUpdated(true);
         when(statusService.getActiveStatuses(1L)).thenReturn(Map.of(10L, status));
         when(statusService.getActiveStatuses(2L)).thenReturn(Map.of());
 
@@ -65,6 +66,7 @@ class EvacuationReportServiceTest {
         assertThat(data).hasSize(2);
         assertThat(data.get(list1)).extracting(r -> r.item().getId()).containsExactly(10L);
         assertThat(data.get(list1)).extracting(EvacuationReportRow::entranceTime).containsExactly(123L);
+        assertThat(data.get(list1)).extracting(EvacuationReportRow::manuallyUpdated).containsExactly(true);
         assertThat(data.get(list2)).isEmpty();
     }
 
