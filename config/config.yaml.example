@@ -32,6 +32,8 @@ vezha:
 # ====== Telegram ======
 telegram:
   bot:
+    # Set to false to temporarily disable long-polling when DNS/network to api.telegram.org is unavailable.
+    enabled: true
     token: "DUMMY"
     username: "dummy_bot"
 

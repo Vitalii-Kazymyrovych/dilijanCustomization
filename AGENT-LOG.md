@@ -44,3 +44,4 @@
 - Removed evacuation workbook “manual add” behavior by accepting only explicit unchecked (`false`) status rows during Telegram import (including exact-name fallback), so uploads now support removals only.
 - Reworked unknown auto-generated retention: cleanup now runs hourly, keeps non-auto entries untouched, and deletes only `comment=auto-unknown` items older than 24 hours using list-item `created_at`; added DTO parsing and regression tests.
 - Updated README to document the evacuation-import restriction and the new 24-hour unknown retention policy.
+- Added `telegram.bot.enabled` gating to Telegram bot/session wiring (`TelegramBot` and `TelegramConfig`) so operators can disable polling during temporary `api.telegram.org` DNS outages, added `TelegramConfigTest` coverage for enabled/disabled behavior, and documented the toggle in README/config example.
