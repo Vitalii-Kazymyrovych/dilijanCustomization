@@ -1,3 +1,5 @@
+- Fixed manual evacuation status updates to preserve existing detection-based entrance/exit timestamps instead of stamping upload time, preventing false "last seen" times in reports; added service regression test coverage and updated README.
+- Fixed VEZHA DB detection-time selection to prefer `face_detections.timestamp` (event time) over `created_at` when available, with automatic schema fallback and repository tests, so evacuation entrance times match Analytics event timestamps.
 - Added comprehensive unit tests for reporting, evacuation, unknown list initialization, and VEZHA client pagination to improve coverage.
 - Declared missing dependencies (commons-lang3, mockito-inline) required by the codebase and tests.
 - Documented the expanded test suite and execution notes in README.

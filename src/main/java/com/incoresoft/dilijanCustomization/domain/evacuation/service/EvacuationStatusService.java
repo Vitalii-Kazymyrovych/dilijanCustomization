@@ -143,9 +143,11 @@ public class EvacuationStatusService {
     /** Обновление статуса одного пользователя в списке. */
     @Transactional
     public void updateStatus(Long listId, Long listItemId, boolean status) {
-        Long now = System.currentTimeMillis();
-        Long entranceTime = status ? now : null;
-        Long exitTime = status ? null : now;
+        EvacuationStatus existing = evacuationStatusRepository
+                .findById(new EvacuationStatusPK(listId, listItemId))
+                .orElse(null);
+        Long entranceTime = existing != null ? existing.getEntranceTime() : null;
+        Long exitTime = existing != null ? existing.getExitTime() : null;
         updateStatus(listId, listItemId, status, entranceTime, exitTime, true);
     }
 

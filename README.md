@@ -19,6 +19,7 @@ See [TECHNICAL-SPEC.md](TECHNICAL-SPEC.md) for the aligned functional specificat
   - Startup list initialization now logs and skips if VEZHA returns an invalid response (e.g., invalid Content-Type), preventing the application from failing on boot.
 - **Evacuation domain**: `EvacuationStatusService` now reads time-attendance-enabled lists, list items, and latest detections directly from VEZHA PostgreSQL (`videoanalytics.*` tables), determines who last entered vs. exited, and persists statuses via `EvacuationStatusRepository` in the local evacuation PostgreSQL. `EvacuationReportService` refreshes statuses and assembles an XLSX workbook through `ReportService`, which embeds photos and exports the status column as ☑/☐ symbols with validation so Google Sheets renders checkboxes (checked by default).
   - The evacuation status table stores the timestamps of the last entrance and exit detections per person (`entrance_time`, `exit_time`) plus a `manually_updated` flag so manual overrides are preserved until a newer detection arrives.
+  - Manual status updates from uploaded Telegram workbooks no longer overwrite `entrance_time` / `exit_time` with upload-time values; they now keep the latest detection-based timestamps so report times remain tied to real events.
   - Evacuation status refresh paginates through all list items, so lists with more than 1000 people still update statuses correctly.
   - Telegram uploads of evacuation workbooks now read the list item ID from the dedicated “ID” column (column 3) produced by `ReportService`, so evacuation status updates line up with the exported report.
   - If the ID column is empty, Telegram upload parsing now falls back to the “Name” column and resolves people by exact full-name match within the same list; when such a row has no explicit status value, it is treated as “On site” (present) so adding names alone works for manual additions.
@@ -62,6 +63,7 @@ Configuration is loaded from `config/config.yaml` (not committed) with defaults 
 - `unknown.*`: whether to autostart unknown list creation/cleanup. Unknown-list startup initialization is now opt-in (requires explicit `unknown.autostart=true`). It also includes `camera-resolution-height` and `desired-image-height` to filter out too-small auto-generated unknown face crops based on detection box size.
 - `postgres.*`: JDBC / psql settings for the evacuation status table. Invalid or blank port values now fall back to `5432` so config typos do not break report generation.
 - `vezha.db.*`: direct VEZHA PostgreSQL connection used by evacuation status/report generation and cafeteria attendance generation to read `face_lists`, `face_list_items` (+ images), and `face_detections` without REST pagination overhead.
+  - For evacuation status timestamps, VEZHA DB reads now prefer `face_detections.timestamp` (event time) when that column exists and fall back to `created_at` for older schemas, preventing delayed-ingest `created_at` values from shifting entrance times in reports.
 
 ## Package map
 - `web/` — REST controllers.

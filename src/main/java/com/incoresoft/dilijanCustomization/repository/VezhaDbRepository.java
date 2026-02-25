@@ -18,6 +18,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -26,6 +27,7 @@ public class VezhaDbRepository {
     private final JdbcTemplate jdbcTemplate;
     private final VezhaDbProps vezhaDbProps;
     private final ObjectMapper objectMapper;
+    private final AtomicReference<Boolean> hasDetectionTimestampColumn = new AtomicReference<>();
 
     public VezhaDbRepository(@Qualifier("vezhaJdbcTemplate") JdbcTemplate jdbcTemplate,
                              VezhaDbProps vezhaDbProps,
@@ -103,7 +105,16 @@ public class VezhaDbRepository {
             return List.of();
         }
         String placeholders = analyticsIds.stream().map(x -> "?").collect(Collectors.joining(","));
-        String sql = "SELECT DISTINCT ON (fd.list_item_id) fd.list_item_id, fd.analytics_id, fd.created_at " +
+        boolean useEventTimestamp = hasFaceDetectionsTimestampColumn();
+        String sql = useEventTimestamp
+                ? "SELECT DISTINCT ON (fd.list_item_id) fd.list_item_id, fd.analytics_id, fd.timestamp AS event_timestamp " +
+                "FROM " + schema() + ".face_detections fd " +
+                "WHERE fd.list_id = ? AND fd.list_item_id IS NOT NULL " +
+                "AND fd.analytics_id IN (" + placeholders + ") " +
+                "AND (? IS NULL OR fd.timestamp >= ?) " +
+                "AND (? IS NULL OR fd.timestamp <= ?) " +
+                "ORDER BY fd.list_item_id, fd.timestamp DESC, fd.id DESC"
+                : "SELECT DISTINCT ON (fd.list_item_id) fd.list_item_id, fd.analytics_id, fd.created_at " +
                 "FROM " + schema() + ".face_detections fd " +
                 "WHERE fd.list_id = ? AND fd.list_item_id IS NOT NULL " +
                 "AND fd.analytics_id IN (" + placeholders + ") " +
@@ -128,12 +139,29 @@ public class VezhaDbRepository {
             analytics.setId(rsLong(rs, "analytics_id"));
             d.setAnalytics(analytics);
 
-            Timestamp created = rs.getTimestamp("created_at");
-            if (created != null) {
-                d.setTimestamp(created.toInstant().atZone(ZoneOffset.UTC).toInstant().toEpochMilli());
+            if (useEventTimestamp) {
+                d.setTimestamp(rsLong(rs, "event_timestamp"));
+            } else {
+                Timestamp created = rs.getTimestamp("created_at");
+                if (created != null) {
+                    d.setTimestamp(created.toInstant().atZone(ZoneOffset.UTC).toInstant().toEpochMilli());
+                }
             }
             return d;
         }, params.toArray());
+    }
+
+    private boolean hasFaceDetectionsTimestampColumn() {
+        Boolean cached = hasDetectionTimestampColumn.get();
+        if (cached != null) {
+            return cached;
+        }
+        String sql = "SELECT EXISTS (" +
+                "SELECT 1 FROM information_schema.columns " +
+                "WHERE table_schema = ? AND table_name = 'face_detections' AND column_name = 'timestamp')";
+        boolean exists = Boolean.TRUE.equals(jdbcTemplate.queryForObject(sql, Boolean.class, schema()));
+        hasDetectionTimestampColumn.compareAndSet(null, exists);
+        return hasDetectionTimestampColumn.get();
     }
 
     private TimeAttendance parseTimeAttendance(String json) {

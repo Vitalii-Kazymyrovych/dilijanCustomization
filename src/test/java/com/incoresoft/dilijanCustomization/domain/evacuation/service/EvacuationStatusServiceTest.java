@@ -54,9 +54,32 @@ class EvacuationStatusServiceTest {
         assertThat(saved.getListId()).isEqualTo(1L);
         assertThat(saved.getListItemId()).isEqualTo(2L);
         assertThat(saved.getStatus()).isTrue();
-        assertThat(saved.getEntranceTime()).isNotNull();
+        assertThat(saved.getEntranceTime()).isNull();
         assertThat(saved.getExitTime()).isNull();
         assertThat(saved.getManuallyUpdated()).isTrue();
+    }
+
+
+    @Test
+    void manualUpdateKeepsExistingDetectionTimes() {
+        VezhaDbRepository repo = mock(VezhaDbRepository.class);
+        EvacuationProps props = new EvacuationProps();
+        PostgresProps postgresProps = new PostgresProps();
+        EvacuationStatusRepository statusRepo = mock(EvacuationStatusRepository.class);
+
+        EvacuationStatus existing = new EvacuationStatus();
+        existing.setListId(1L);
+        existing.setListItemId(2L);
+        existing.setStatus(false);
+        existing.setEntranceTime(100L);
+        existing.setExitTime(200L);
+        when(statusRepo.findById(new EvacuationStatusPK(1L, 2L))).thenReturn(java.util.Optional.of(existing));
+        when(statusRepo.existsById(new EvacuationStatusPK(1L, 2L))).thenReturn(true);
+
+        EvacuationStatusService service = new EvacuationStatusService(repo, props, postgresProps, statusRepo);
+        service.updateStatus(1L, 2L, true);
+
+        verify(statusRepo).updateStatus(1L, 2L, true, 100L, 200L, true);
     }
 
     @Test
