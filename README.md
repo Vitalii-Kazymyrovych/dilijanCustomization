@@ -57,7 +57,7 @@ See [TECHNICAL-SPEC.md](TECHNICAL-SPEC.md) for the aligned functional specificat
 ## Configuration
 Configuration is loaded from `config/config.yaml` (not committed) with defaults in `config/config.yaml.example`:
 - `vezha.api.*`: base URL and token for VEZHA REST calls. You can also set `min-detection-similarity` (defaults to `0`) to satisfy VEZHA’s detections endpoint when it requires the parameter.
-- `telegram.bot.*`: credentials for the polling bot.
+- `telegram.bot.*`: credentials for the polling bot plus `enabled` (default `true`) to allow temporarily disabling long-polling if `api.telegram.org` DNS/network is unavailable.
 - `evacuation.*`: toggle/intervals for status refresh and report eligibility.
 - `vezha.cafe.*`: analytics ids, timezone, cron, excluded lists, and output directory for cafeteria XLSX.
 - `unknown.*`: whether to autostart unknown list creation/cleanup. Unknown-list startup initialization is now opt-in (requires explicit `unknown.autostart=true`). It also includes `camera-resolution-height` and `desired-image-height` to filter out too-small auto-generated unknown face crops based on detection box size.
@@ -94,6 +94,7 @@ Configuration is loaded from `config/config.yaml` (not committed) with defaults 
 - Search-by-photo errors now log the HTTP status/response summary (without stack traces) so operators immediately see VEZHA’s reason, such as `ERROR_NO_FACES_DETECTED`.
 - Telegram full-name fallback lookup now includes pagination safety guards to avoid infinite loops when VEZHA list-item pagination does not advance; matching continues with the names collected so far.
 - Telegram workbook ingestion now applies only explicit `false` (unchecked) status rows, including exact-name fallback rows, so uploads support removals only and no longer add people as present.
+- Telegram polling beans are now guarded by `telegram.bot.enabled`, so setting it to `false` cleanly disables bot session startup (useful during temporary `UnknownHostException: api.telegram.org` incidents).
 - `UnknownPersonService` now safely handles partially populated webhook payloads (missing list/list_item nesting), fails fast on missing event timestamps, and filters out detections whose box height resolves below the configured minimum pixel threshold, with regression tests covering the guards and size filter.
 
 - Attendance reports now prefer VEZHA DB queries when `vezha.db.enabled=true` and only use VEZHA REST as a fallback, reducing API dependency during report generation.
