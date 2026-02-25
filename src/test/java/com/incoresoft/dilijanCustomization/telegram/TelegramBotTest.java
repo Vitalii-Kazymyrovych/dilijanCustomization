@@ -46,8 +46,7 @@ class TelegramBotTest {
                     TelegramBot.extractUpdatesFromWorkbook(wb, nameToId);
 
             assertThat(updates).containsExactly(
-                    new TelegramBot.EvacuationUpdate(99L, 10L, false),
-                    new TelegramBot.EvacuationUpdate(99L, 11L, true)
+                    new TelegramBot.EvacuationUpdate(99L, 10L, false)
             );
         }
     }
@@ -73,7 +72,7 @@ class TelegramBotTest {
     }
 
     @Test
-    void extractUpdatesResolvesIdByExactFullNameWhenIdIsMissing() throws Exception {
+    void extractUpdatesSkipsResolvedNameRowWhenStatusIsTrue() throws Exception {
         try (XSSFWorkbook wb = new XSSFWorkbook()) {
             var sheet = wb.createSheet("List_1");
             var header = sheet.createRow(0);
@@ -90,9 +89,7 @@ class TelegramBotTest {
             List<TelegramBot.EvacuationUpdate> updates =
                     TelegramBot.extractUpdatesFromWorkbook(wb, nameToId, listItemMappings);
 
-            assertThat(updates).containsExactly(
-                    new TelegramBot.EvacuationUpdate(99L, 123L, true)
-            );
+            assertThat(updates).isEmpty();
         }
     }
 
@@ -117,12 +114,13 @@ class TelegramBotTest {
     }
 
     @Test
-    void extractUpdatesDefaultsToPresentWhenResolvedByExactNameWithoutStatus() throws Exception {
+    void extractUpdatesResolvesIdByExactFullNameWhenIdIsMissingAndStatusIsFalse() throws Exception {
         try (XSSFWorkbook wb = new XSSFWorkbook()) {
             var sheet = wb.createSheet("List_1");
             sheet.createRow(0);
 
             var row = sheet.createRow(1);
+            row.createCell(0).setCellValue(false);
             row.createCell(4).setCellValue("John Smith");
 
             Map<String, Long> nameToId = Map.of("List_1", 99L);
@@ -132,7 +130,7 @@ class TelegramBotTest {
                     TelegramBot.extractUpdatesFromWorkbook(wb, nameToId, listItemMappings);
 
             assertThat(updates).containsExactly(
-                    new TelegramBot.EvacuationUpdate(99L, 123L, true)
+                    new TelegramBot.EvacuationUpdate(99L, 123L, false)
             );
         }
     }
