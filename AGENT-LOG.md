@@ -40,3 +40,5 @@
 - Changed unknown list startup initializer to be opt-in when `unknown.autostart=true` is explicitly set, preventing unexpected API calls when config is missing.
 - Added unknown-person auto-add size filtering using detection `box` height (pixel-converted via new `unknown.camera-resolution-height` and `unknown.desired-image-height` config), extended DTO/test coverage, and updated README/config example.
 
+- Added a `Manually updated` checkbox column to evacuation XLSX exports, propagated manual-flag data into `EvacuationReportRow`, and added tests covering report export plus the refresh behavior that clears manual overrides (`manually_updated=true -> false`) when a newer detection arrives.
+- Revised evacuation export manual-override presentation based on feedback: the new `Manually updated` column now outputs plain `yes`/`no` text (not checkboxes), kept status as ☑/☐, updated report tests, and refreshed README documentation.

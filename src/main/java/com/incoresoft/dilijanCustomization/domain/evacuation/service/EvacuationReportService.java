@@ -83,7 +83,12 @@ public class EvacuationReportService {
         return items.stream()
                 .filter(it -> it.getId() != null && activeStatuses.containsKey(it.getId()))
                 .sorted(Comparator.comparing(li -> Optional.ofNullable(li.getName()).orElse("").toLowerCase(Locale.ROOT)))
-                .map(li -> new EvacuationReportRow(li, activeStatuses.get(li.getId()).getEntranceTime()))
+                .map(li -> {
+                    EvacuationStatus status = activeStatuses.get(li.getId());
+                    return new EvacuationReportRow(li,
+                            status.getEntranceTime(),
+                            Boolean.TRUE.equals(status.getManuallyUpdated()));
+                })
                 .toList();
     }
 

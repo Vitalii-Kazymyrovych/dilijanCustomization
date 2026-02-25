@@ -72,7 +72,7 @@ class ReportServiceTest {
 
         File out = File.createTempFile("evac-", ".xlsx");
         long entranceTime = 1_701_000_000_000L;
-        EvacuationReportRow row = new EvacuationReportRow(item, entranceTime);
+        EvacuationReportRow row = new EvacuationReportRow(item, entranceTime, true);
         File result = service.exportEvacuationWorkbook(Map.of(list, List.of(row)), out);
 
         try (FileInputStream fis = new FileInputStream(result); XSSFWorkbook wb = new XSSFWorkbook(fis)) {
@@ -87,6 +87,7 @@ class ReportServiceTest {
             assertThat(data.getCell(3).getNumericCellValue()).isEqualTo(5);
             assertThat(data.getCell(4).getStringCellValue()).isEqualTo("John Doe");
             assertThat(data.getCell(5).getStringCellValue()).isEqualTo("comment");
+            assertThat(data.getCell(6).getStringCellValue()).isEqualTo("yes");
         }
     }
 }

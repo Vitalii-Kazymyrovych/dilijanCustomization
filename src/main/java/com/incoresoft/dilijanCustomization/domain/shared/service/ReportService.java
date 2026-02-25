@@ -29,6 +29,7 @@ import java.util.Map;
 public class ReportService {
     private static final float ROW_HEIGHT_PT = 150f;
     private static final int COL_WIDTH_CHECKBOX = 15 * 256;
+    private static final int COL_WIDTH_MANUAL = 18 * 256;
     private static final int COL_WIDTH_TIME    = 25 * 256;
     private static final int COL_WIDTH_PHOTO   = 30 * 256;
     private static final int COL_WIDTH_NAME    = 50 * 256;
@@ -38,6 +39,8 @@ public class ReportService {
     private static final String CHECKBOX_CHECKED = "☑";
     private static final String CHECKBOX_UNCHECKED = "☐";
     private static final String[] EVAC_CHECKBOX_OPTIONS = {CHECKBOX_CHECKED, CHECKBOX_UNCHECKED};
+    private static final String MANUAL_UPDATED_YES = "yes";
+    private static final String MANUAL_UPDATED_NO = "no";
     private static final List<String> COLUMNS = List.of("Category", "Breakfast", "Lunch", "Dinner", "Total");
 
     private final FaceApiRepository repo;
@@ -120,7 +123,7 @@ public class ReportService {
                 );
                 Sheet sh = wb.createSheet(sheetName);
 
-                // Header: Status, Entrance time, Photo, ID, Name, Comment
+                // Header: Status, Entrance time, Photo, ID, Name, Comment, Manually updated
                 Row header = sh.createRow(0);
                 header.createCell(0).setCellValue("Status");
                 header.createCell(1).setCellValue("Entrance time");
@@ -128,6 +131,7 @@ public class ReportService {
                 header.createCell(3).setCellValue("ID");
                 header.createCell(4).setCellValue("Name");
                 header.createCell(5).setCellValue("Comment");
+                header.createCell(6).setCellValue("Manually updated");
 
                 sh.setDefaultRowHeightInPoints(ROW_HEIGHT_PT);
                 sh.setColumnWidth(0, COL_WIDTH_CHECKBOX);
@@ -136,6 +140,7 @@ public class ReportService {
                 sh.setColumnWidth(3, COL_WIDTH_ID);
                 sh.setColumnWidth(4, COL_WIDTH_NAME);
                 sh.setColumnWidth(5, COL_WIDTH_COMMENT);
+                sh.setColumnWidth(6, COL_WIDTH_MANUAL);
                 header.setHeightInPoints(24f);
 
                 Drawing<?> drawing = sh.createDrawingPatriarch();
@@ -187,19 +192,23 @@ public class ReportService {
                     // Comment
                     row.createCell(5).setCellValue(nullSafe(item.getComment()));
 
+                    // Manually updated
+                    Cell manuallyUpdatedCell = row.createCell(6, CellType.STRING);
+                    manuallyUpdatedCell.setCellValue(rowData.manuallyUpdated() ? MANUAL_UPDATED_YES : MANUAL_UPDATED_NO);
+
                     r++;
                 }
 
                 // Checkbox-style validation on Status column for data rows
                 DataValidationHelper dvHelper = sh.getDataValidationHelper();
                 DataValidationConstraint dvConstraint = dvHelper.createExplicitListConstraint(EVAC_CHECKBOX_OPTIONS);
-                CellRangeAddressList addressList =
+                CellRangeAddressList statusAddressList =
                         new CellRangeAddressList(1, Math.max(1, sh.getLastRowNum()), 0, 0);
-                DataValidation validation = dvHelper.createValidation(dvConstraint, addressList);
-                validation.setSuppressDropDownArrow(true);
-                validation.setEmptyCellAllowed(true);
-                validation.setShowErrorBox(true);
-                sh.addValidationData(validation);
+                DataValidation statusValidation = dvHelper.createValidation(dvConstraint, statusAddressList);
+                statusValidation.setSuppressDropDownArrow(true);
+                statusValidation.setEmptyCellAllowed(true);
+                statusValidation.setShowErrorBox(true);
+                sh.addValidationData(statusValidation);
             }
 
             try (FileOutputStream fos = new FileOutputStream(outFile)) {

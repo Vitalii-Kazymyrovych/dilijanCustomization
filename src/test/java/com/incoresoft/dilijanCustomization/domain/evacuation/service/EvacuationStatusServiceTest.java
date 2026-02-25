@@ -124,4 +124,52 @@ class EvacuationStatusServiceTest {
         assertThat(saved.getManuallyUpdated()).isTrue();
         assertThat(saved.getEntranceTime()).isEqualTo(123L);
     }
+
+    @Test
+    void newerDetectionResetsManualOverrideAndUsesDetectionData() {
+        VezhaDbRepository repo = mock(VezhaDbRepository.class);
+        EvacuationProps props = new EvacuationProps();
+        PostgresProps postgresProps = new PostgresProps();
+        EvacuationStatusRepository statusRepo = mock(EvacuationStatusRepository.class);
+        EvacuationStatusService service = new EvacuationStatusService(repo, props, postgresProps, statusRepo);
+
+        FaceListDto list = new FaceListDto();
+        list.setId(1L);
+        list.setTimeAttendance(new TimeAttendance(true, List.of(1L), List.of(2L)));
+
+        ListItemDto item = new ListItemDto();
+        item.setId(5L);
+        when(repo.findListItems(1L)).thenReturn(List.of(item));
+
+        DetectionDto detection = new DetectionDto();
+        detection.setTimestamp(200L);
+        DetectionDto.AnalyticsRef analytics = new DetectionDto.AnalyticsRef();
+        analytics.setId(1L);
+        detection.setAnalytics(analytics);
+        ListItemDto detectedItem = new ListItemDto();
+        detectedItem.setId(5L);
+        detection.setListItem(detectedItem);
+        when(repo.findLatestDetectionsByListItem(eq(1L), anyList(), anyLong(), anyLong()))
+                .thenReturn(List.of(detection));
+
+        EvacuationStatus existing = new EvacuationStatus();
+        existing.setListId(1L);
+        existing.setListItemId(5L);
+        existing.setStatus(false);
+        existing.setEntranceTime(123L);
+        existing.setExitTime(150L);
+        existing.setManuallyUpdated(true);
+        when(statusRepo.findByListId(1L)).thenReturn(List.of(existing));
+
+        ReflectionTestUtils.invokeMethod(service, "updateListStatuses", list, 0L, 300L);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<EvacuationStatus>> captor = ArgumentCaptor.forClass(List.class);
+        verify(statusRepo).saveAll(captor.capture());
+        EvacuationStatus saved = captor.getValue().getFirst();
+        assertThat(saved.getStatus()).isTrue();
+        assertThat(saved.getManuallyUpdated()).isFalse();
+        assertThat(saved.getEntranceTime()).isEqualTo(200L);
+        assertThat(saved.getExitTime()).isNull();
+    }
 }
